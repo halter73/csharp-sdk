@@ -12,7 +12,7 @@ using ModelContextProtocol.Utils.Json;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
-namespace ModelContextProtocol.AspNetCore;
+namespace Microsoft.AspNetCore.Routing;
 
 /// <summary>
 /// Extension methods for <see cref="IEndpointRouteBuilder"/> to add MCP endpoints.
