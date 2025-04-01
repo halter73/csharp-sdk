@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Logging;
 using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Protocol.Types;
@@ -15,8 +14,8 @@ internal sealed class McpServer : McpJsonRpcEndpoint, IMcpServer
     private readonly EventHandler? _toolsChangedDelegate;
     private readonly EventHandler? _promptsChangedDelegate;
 
-    private ITransport _sessionTransport;
     private string _endpointName;
+    private int _started;
 
     /// <summary>
     /// Creates a new instance of <see cref="McpServer"/>.
@@ -33,7 +32,6 @@ internal sealed class McpServer : McpJsonRpcEndpoint, IMcpServer
         Throw.IfNull(transport);
         Throw.IfNull(options);
 
-        _sessionTransport = transport;
         ServerOptions = options;
         Services = serviceProvider;
         _endpointName = $"Server ({options.ServerInfo.Name} {options.ServerInfo.Version})";
@@ -76,6 +74,8 @@ internal sealed class McpServer : McpJsonRpcEndpoint, IMcpServer
         SetPromptsHandler(options);
         SetResourcesHandler(options);
         SetSetLoggingLevelHandler(options);
+
+        StartSession(transport);
     }
 
     public ServerCapabilities? ServerCapabilities { get; set; }
@@ -98,11 +98,16 @@ internal sealed class McpServer : McpJsonRpcEndpoint, IMcpServer
     /// <inheritdoc />
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
+        if (Interlocked.Exchange(ref _started, 1) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(RunAsync)} must only be called once.");
+        }
+
         try
         {
-            // Start processing messages
-            StartSession(_sessionTransport, fullSessionCancellationToken: cancellationToken);
-            await MessageProcessingTask.ConfigureAwait(false);
+            using var _ = cancellationToken.Register(static s => ((McpServer)s!).CancelSession(), this);
+            // The McpServer ctor always calls StartSession, so MessageProcessingTask is always set.
+            await MessageProcessingTask!.ConfigureAwait(false);
         }
         finally
         {
