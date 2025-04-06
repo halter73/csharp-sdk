@@ -34,7 +34,6 @@ public sealed class KestrelInMemoryTransport : IConnectionListenerFactory, IConn
     public ValueTask<IConnectionListener> BindAsync(EndPoint endpoint, CancellationToken cancellationToken = default)
     {
         _endPoint = endpoint;
-
         return new ValueTask<IConnectionListener>(this);
     }
 
