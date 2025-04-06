@@ -6,17 +6,14 @@ namespace ModelContextProtocol.Tests.Server;
 public class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelInMemoryTest(testOutputHelper)
 {
     [Fact]
-    public async Task Test_InMemory_Transport()
+    public async Task Allows_Customizing_Route()
     {
         await using var app = Builder.Build();
-
-        app.MapGet("/", () => "Hello World!");
-
+        app.MapMcp("/mcp");
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var httpClient = GetHttpClient();
-        var response = await httpClient.GetAsync("http://localhost/", TestContext.Current.CancellationToken);
+        var response = await httpClient.GetAsync("http://localhost/mcp/sse", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
-        Assert.Equal("Hello World!", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 }

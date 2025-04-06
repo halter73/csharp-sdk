@@ -44,7 +44,8 @@ public static class McpEndpointRouteBuilderExtensions
     /// <param name="runSessionAsync">Provides an optional asynchronous callback for handling new MCP sessions.</param>
     /// <param name="configureOptionsAsync">Configure per-session options.</param>
     /// <returns>Returns a builder for configuring additional endpoint conventions like authorization policies.</returns>
-    public static IEndpointConventionBuilder MapMcp(this IEndpointRouteBuilder endpoints, RoutePattern pattern,
+    public static IEndpointConventionBuilder MapMcp(this IEndpointRouteBuilder endpoints,
+        RoutePattern pattern,
         Func<HttpContext, IMcpServer, CancellationToken, Task>? runSessionAsync = null,
         Func<HttpContext, McpServerOptions, CancellationToken, Task>? configureOptionsAsync = null)
     {
@@ -64,6 +65,10 @@ public static class McpEndpointRouteBuilderExtensions
             response.Headers.ContentType = "text/event-stream";
             response.Headers.CacheControl = "no-cache,no-store";
 
+            // Make sure we disable all response buffering for SSE
+            context.Response.Headers.ContentEncoding = "identity";
+            context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
+
             var sessionId = MakeNewSessionId();
             await using var transport = new SseResponseStreamTransport(response.Body, $"/message?sessionId={sessionId}");
             if (!_sessions.TryAdd(sessionId, transport))
@@ -80,10 +85,6 @@ public static class McpEndpointRouteBuilderExtensions
 
             try
             {
-                // Make sure we disable all response buffering for SSE
-                context.Response.Headers.ContentEncoding = "identity";
-                context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
-
                 var transportTask = transport.RunAsync(cancellationToken: requestAborted);
                 await using var server = McpServerFactory.Create(transport, options, loggerFactory, endpoints.ServiceProvider);
 
