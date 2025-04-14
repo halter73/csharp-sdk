@@ -29,9 +29,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
 
     private Task? _sseWriteTask;
     private Utf8JsonWriter? _jsonWriter;
-
-    /// <inheritdoc />
-    public bool IsConnected { get; private set; }
+    private bool _isConnected;
 
     /// <summary>
     /// Starts the transport and writes the JSON-RPC messages sent via <see cref="SendMessageAsync"/>
@@ -48,7 +46,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
             throw new InvalidOperationException($"You must call ${nameof(RunAsync)} before calling ${nameof(SendMessageAsync)}.");
         }
 
-        IsConnected = true;
+        _isConnected = true;
 
         var sseItems = _outgoingSseChannel.Reader.ReadAllAsync(cancellationToken);
         return _sseWriteTask = SseFormatter.WriteAsync(sseItems, sseResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
@@ -71,7 +69,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        IsConnected = false;
+        _isConnected = false;
         _incomingChannel.Writer.TryComplete();
         _outgoingSseChannel.Writer.TryComplete();
         return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
@@ -80,7 +78,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// <inheritdoc/>
     public async Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        if (!IsConnected)
+        if (!_isConnected)
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
@@ -113,7 +111,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// </remarks>
     public async Task OnMessageReceivedAsync(IJsonRpcMessage message, CancellationToken cancellationToken)
     {
-        if (!IsConnected)
+        if (!_isConnected)
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }

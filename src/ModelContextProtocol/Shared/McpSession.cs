@@ -340,11 +340,6 @@ internal sealed partial class McpSession : IDisposable
     /// <returns>A task containing the server's response.</returns>
     public async Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken)
     {
-        if (!_transport.IsConnected)
-        {
-            throw new McpException("Transport is not connected");
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
         Histogram<double> durationMetric = _isServer ? s_serverOperationDuration : s_clientOperationDuration;
@@ -440,11 +435,6 @@ internal sealed partial class McpSession : IDisposable
     public async Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(message);
-
-        if (!_transport.IsConnected)
-        {
-            throw new McpException("Transport is not connected");
-        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
