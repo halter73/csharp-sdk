@@ -213,17 +213,20 @@ internal sealed partial class SseClientSessionTransport : TransportBase
                 }
             }
         }
-        catch when (cancellationToken.IsCancellationRequested)
-        {
-            // Normal shutdown
-            LogTransportReadMessagesCancelled(Name);
-            _connectionEstablished.TrySetCanceled(cancellationToken);
-        }
         catch (Exception ex)
         {
-            LogTransportReadMessagesFailed(Name, ex);
-            _connectionEstablished.TrySetException(ex);
-            throw;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Normal shutdown
+                LogTransportReadMessagesCancelled(Name);
+                _connectionEstablished.TrySetCanceled(cancellationToken);
+            }
+            else
+            {
+                LogTransportReadMessagesFailed(Name, ex);
+                _connectionEstablished.TrySetException(ex);
+                throw;
+            }
         }
         finally
         {

@@ -198,7 +198,7 @@ public partial class SseIntegrationTests(ITestOutputHelper outputHelper) : Kestr
     }
 
     [Fact]
-    public async Task EmptyAdditionalHeadersKey_Throws_InvalidOpearionException()
+    public async Task EmptyAdditionalHeadersKey_Throws_InvalidOperationException()
     {
         Builder.Services.AddMcpServer()
             .WithHttpTransport();
