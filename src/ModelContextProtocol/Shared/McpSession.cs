@@ -47,7 +47,8 @@ internal sealed partial class McpSession : IDisposable
     private readonly ConcurrentDictionary<RequestId, CancellationTokenSource> _handlingRequests = new();
     private readonly ILogger _logger;
 
-    private readonly string _id = Guid.NewGuid().ToString("N");
+    // This _sessionId is solely used to identify the session in telemetry and logs.
+    private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private long _nextRequestId;
 
     /// <summary>
@@ -353,7 +354,7 @@ internal sealed partial class McpSession : IDisposable
         // Set request ID
         if (request.Id.Id is null)
         {
-            request.Id = new RequestId($"{_id}-{Interlocked.Increment(ref _nextRequestId)}");
+            request.Id = new RequestId(Interlocked.Increment(ref _nextRequestId));
         }
 
         _propagator.InjectActivityContext(activity, request);
@@ -524,7 +525,7 @@ internal sealed partial class McpSession : IDisposable
         if (activity is { IsAllDataRequested: true })
         {
             // session and request id have high cardinality, so not applying to metric tags
-            activity.AddTag("mcp.session.id", _id);
+            activity.AddTag("mcp.session.id", _sessionId);
 
             if (message is IJsonRpcMessageWithId withId)
             {
