@@ -27,7 +27,10 @@ public class KestrelInMemoryTest : LoggedTest
                 var connection = _inMemoryTransport.CreateConnection();
                 return new(connection.ClientStream);
             },
-        });
+        })
+        {
+            BaseAddress = new Uri("http://localhost:5000/"),
+        };
     }
 
     public WebApplicationBuilder Builder { get; }
