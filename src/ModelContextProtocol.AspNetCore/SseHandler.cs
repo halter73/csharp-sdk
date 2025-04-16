@@ -14,7 +14,7 @@ using System.Security.Cryptography;
 
 namespace ModelContextProtocol.AspNetCore;
 
-internal sealed class StreamableHttpHandler(
+internal sealed class SseHandler(
     IOptions<McpServerOptions> mcpServerOptionsSnapshot,
     IOptionsFactory<McpServerOptions> mcpServerOptionsFactory,
     IOptions<HttpServerTransportOptions> httpMcpServerOptions,
@@ -22,17 +22,27 @@ internal sealed class StreamableHttpHandler(
     ILoggerFactory loggerFactory)
 {
     private readonly ConcurrentDictionary<string, HttpMcpSession> _sessions = new(StringComparer.Ordinal);
-    private readonly ILogger _logger = loggerFactory.CreateLogger<StreamableHttpHandler>();
+    private readonly ILogger _logger = loggerFactory.CreateLogger<SseHandler>();
 
     public async Task HandleRequestAsync(HttpContext context)
     {
-        Debug.Assert(context.Request.Method == HttpMethods.Post);
-        await HandleSseRequestAsync(context);
+        if (context.Request.Method == HttpMethods.Get)
+        {
+            await HandleSseRequestAsync(context);
+        }
+        else if (context.Request.Method == HttpMethods.Post)
+        {
+            await HandleMessageRequestAsync(context);
+        }
+        else
+        {
+            throw new UnreachableException($"Unexpected HTTP method: {context.Request.Method}.");
+        }
     }
 
     public async Task HandleSseRequestAsync(HttpContext context)
     {
-        var sessionId = MakeNewSessionId();
+        var sessionId = StreamableHttpHandler.MakeNewSessionId();
 
         // If the server is shutting down, we need to cancel all SSE connections immediately without waiting for HostOptions.ShutdownTimeout
         // which defaults to 30 seconds.
@@ -42,7 +52,6 @@ internal sealed class StreamableHttpHandler(
         var response = context.Response;
         response.Headers.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache,no-store";
-        response.Headers["mcp-session-id"] = sessionId;
 
         // Make sure we disable all response buffering for SSE
         context.Response.Headers.ContentEncoding = "identity";
@@ -72,7 +81,7 @@ internal sealed class StreamableHttpHandler(
                 await using var mcpServer = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
                 context.Features.Set(mcpServer);
 
-                var runSessionAsync = httpMcpServerOptions.Value.RunSessionHandler ?? RunSessionAsync;
+                var runSessionAsync = httpMcpServerOptions.Value.RunSessionHandler ?? StreamableHttpHandler.RunSessionAsync;
                 await runSessionAsync(context, mcpServer, cancellationToken);
             }
             finally
@@ -122,16 +131,5 @@ internal sealed class StreamableHttpHandler(
         await httpMcpSession.Transport.OnMessageReceivedAsync(message, context.RequestAborted);
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         await context.Response.WriteAsync("Accepted");
-    }
-
-    internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)
-        => session.RunAsync(requestAborted);
-
-    internal static string MakeNewSessionId()
-    {
-        // 128 bits
-        Span<byte> buffer = stackalloc byte[16];
-        RandomNumberGenerator.Fill(buffer);
-        return WebEncoders.Base64UrlEncode(buffer);
     }
 }

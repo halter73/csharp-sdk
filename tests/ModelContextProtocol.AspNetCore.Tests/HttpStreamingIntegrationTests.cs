@@ -21,7 +21,11 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
             """;
 
         using var initializeRequestBody = new StringContent(initializeRequest, Encoding.UTF8, "application/json");
-        var response = await HttpClient.PostAsync("", initializeRequestBody, TestContext.Current.CancellationToken);
+        using var postRequestMessage = new HttpRequestMessage(HttpMethod.Post, "")
+        {
+            Content = initializeRequestBody,
+        };
+        var response = await HttpClient.SendAsync(postRequestMessage, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
     }

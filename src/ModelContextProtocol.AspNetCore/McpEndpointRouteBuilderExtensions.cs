@@ -19,13 +19,17 @@ public static class McpEndpointRouteBuilderExtensions
     /// <returns>Returns a builder for configuring additional endpoint conventions like authorization policies.</returns>
     public static IEndpointConventionBuilder MapMcp(this IEndpointRouteBuilder endpoints, [StringSyntax("Route")] string pattern = "")
     {
-        var handler = endpoints.ServiceProvider.GetService<StreamableHttpHandler>() ??
+        var streamableHttpHandler = endpoints.ServiceProvider.GetService<StreamableHttpHandler>() ??
             throw new InvalidOperationException("You must call WithHttpTransport(). Unable to find required services. Call builder.Services.AddMcpServer().WithHttpTransport() in application startup code.");
 
         var routeGroup = endpoints.MapGroup(pattern);
-        routeGroup.MapGet("", handler.HandleRequestAsync);
-        routeGroup.MapGet("/sse", handler.HandleRequestAsync);
-        routeGroup.MapPost("/message", handler.HandleRequestAsync);
+        routeGroup.MapPost("", streamableHttpHandler.HandleRequestAsync);
+
+        // Map legacy SSE endpoints
+        var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();
+        routeGroup.MapGet("", sseHandler.HandleRequestAsync);
+        routeGroup.MapGet("/sse", sseHandler.HandleRequestAsync);
+        routeGroup.MapPost("/message", sseHandler.HandleRequestAsync);
         return routeGroup;
     }
 }
