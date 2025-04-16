@@ -24,7 +24,7 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// </para>
 /// </remarks>
 /// <param name="streamableHttpResponseBody">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
-public sealed class StreamableHttpResponseStreamTransport(PipeWriter streamableHttpResponseBody) : ITransport
+public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpResponseBody) : ITransport
 {
     private readonly Channel<IJsonRpcMessage> _incomingChannel = CreateBoundedChannel<IJsonRpcMessage>();
     private readonly Channel<SseItem<IJsonRpcMessage>> _outgoingSseChannel = CreateBoundedChannel<SseItem<IJsonRpcMessage>>();
@@ -147,7 +147,6 @@ public sealed class StreamableHttpResponseStreamTransport(PipeWriter streamableH
         {
             if (firstCharacterResult.Buffer.Length == 0)
             {
-                // No data received
                 return false;
             }
 

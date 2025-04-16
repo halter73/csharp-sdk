@@ -75,6 +75,7 @@ internal sealed partial class McpSession : IDisposable
             StdioClientSessionTransport or StdioServerTransport => "stdio",
             StreamClientSessionTransport or StreamServerTransport => "stream",
             SseClientSessionTransport or SseResponseStreamTransport => "sse",
+            StreamableHttpServerTransport => "http",
             _ => "unknownTransport"
         };
 
@@ -103,6 +104,7 @@ internal sealed partial class McpSession : IDisposable
             {
                 LogMessageRead(EndpointName, message.GetType().Name);
 
+                // Fire and forget the message handling to avoid blocking the transport.
                 _ = ProcessMessageAsync();
                 async Task ProcessMessageAsync()
                 {
@@ -119,10 +121,8 @@ internal sealed partial class McpSession : IDisposable
                             _handlingRequests[messageWithId.Id] = combinedCts;
                         }
 
-                        // Fire and forget the message handling to avoid blocking the transport
-                        // If awaiting the task, the transport will not be able to read more messages,
-                        // which could lead to a deadlock if the handler sends a message back
-
+                        // If we await the handler without yielding first, the transport may not be able to read more messages,
+                        // which could lead to a deadlock if the handler sends a message back.
 #if NET
                         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 #else

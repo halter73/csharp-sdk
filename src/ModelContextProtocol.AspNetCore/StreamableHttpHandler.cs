@@ -19,7 +19,7 @@ internal sealed class StreamableHttpHandler(
     IHostApplicationLifetime hostApplicationLifetime,
     ILoggerFactory loggerFactory)
 {
-    private readonly ConcurrentDictionary<string, HttpMcpSession<StreamableHttpResponseStreamTransport>> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> _sessions = new(StringComparer.Ordinal);
     private readonly ILogger _logger = loggerFactory.CreateLogger<StreamableHttpHandler>();
 
     public async Task HandleRequestAsync(HttpContext context)
@@ -30,7 +30,7 @@ internal sealed class StreamableHttpHandler(
         }
         else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
-            await HandleMessageRequestAsync(context);
+            await HandlePostRequestAsync(context);
         }
         else
         {
@@ -56,8 +56,8 @@ internal sealed class StreamableHttpHandler(
         context.Response.Headers.ContentEncoding = "identity";
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
-        await using var transport = new StreamableHttpResponseStreamTransport(response.BodyWriter);
-        var httpMcpSession = new HttpMcpSession<StreamableHttpResponseStreamTransport>(transport, context.User);
+        await using var transport = new StreamableHttpServerTransport(response.BodyWriter);
+        var httpMcpSession = new HttpMcpSession<StreamableHttpServerTransport>(transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
             Debug.Fail("Unreachable given good entropy!");
@@ -100,7 +100,7 @@ internal sealed class StreamableHttpHandler(
         }
     }
 
-    public async Task HandleMessageRequestAsync(HttpContext context)
+    public async Task HandlePostRequestAsync(HttpContext context)
     {
         if (!context.Request.Query.TryGetValue("sessionId", out var sessionId))
         {
