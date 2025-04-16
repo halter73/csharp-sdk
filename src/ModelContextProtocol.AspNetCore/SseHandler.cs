@@ -21,7 +21,7 @@ internal sealed class SseHandler(
     IHostApplicationLifetime hostApplicationLifetime,
     ILoggerFactory loggerFactory)
 {
-    private readonly ConcurrentDictionary<string, HttpMcpSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, HttpMcpSession<SseResponseStreamTransport>> _sessions = new(StringComparer.Ordinal);
     private readonly ILogger _logger = loggerFactory.CreateLogger<SseHandler>();
 
     public async Task HandleRequestAsync(HttpContext context)
@@ -58,7 +58,7 @@ internal sealed class SseHandler(
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
         await using var transport = new SseResponseStreamTransport(response.Body, $"message?sessionId={sessionId}");
-        var httpMcpSession = new HttpMcpSession(transport, context.User);
+        var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
             Debug.Fail("Unreachable given good entropy!");

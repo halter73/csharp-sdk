@@ -21,7 +21,7 @@ internal sealed class StreamableHttpHandler(
     IHostApplicationLifetime hostApplicationLifetime,
     ILoggerFactory loggerFactory)
 {
-    private readonly ConcurrentDictionary<string, HttpMcpSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, HttpMcpSession<StreamableHttpResponseStreamTransport>> _sessions = new(StringComparer.Ordinal);
     private readonly ILogger _logger = loggerFactory.CreateLogger<StreamableHttpHandler>();
 
     public async Task HandleRequestAsync(HttpContext context)
@@ -48,8 +48,8 @@ internal sealed class StreamableHttpHandler(
         context.Response.Headers.ContentEncoding = "identity";
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
-        await using var transport = new SseResponseStreamTransport(response.Body, $"message?sessionId={sessionId}");
-        var httpMcpSession = new HttpMcpSession(transport, context.User);
+        await using var transport = new StreamableHttpResponseStreamTransport(response.BodyWriter);
+        var httpMcpSession = new HttpMcpSession<StreamableHttpResponseStreamTransport>(transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
             Debug.Fail("Unreachable given good entropy!");

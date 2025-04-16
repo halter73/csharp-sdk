@@ -3,15 +3,15 @@ using System.Security.Claims;
 
 namespace ModelContextProtocol.AspNetCore;
 
-internal class HttpMcpSession
+internal sealed class HttpMcpSession<TTransport>
 {
-    public HttpMcpSession(SseResponseStreamTransport transport, ClaimsPrincipal user)
+    public HttpMcpSession(TTransport transport, ClaimsPrincipal user)
     {
         Transport = transport;
         UserIdClaim = GetUserIdClaim(user);
     }
 
-    public SseResponseStreamTransport Transport { get; }
+    public TTransport Transport { get; }
     public (string Type, string Value, string Issuer)? UserIdClaim { get; }
 
     public bool HasSameUserId(ClaimsPrincipal user)
