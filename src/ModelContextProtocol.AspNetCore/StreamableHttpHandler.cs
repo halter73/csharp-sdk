@@ -4,10 +4,8 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Server;
-using ModelContextProtocol.Utils.Json;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -26,11 +24,21 @@ internal sealed class StreamableHttpHandler(
 
     public async Task HandleRequestAsync(HttpContext context)
     {
-        Debug.Assert(context.Request.Method == HttpMethods.Post);
-        await HandleSseRequestAsync(context);
+        if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleSseResponseAsync(context);
+        }
+        else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleMessageRequestAsync(context);
+        }
+        else
+        {
+            throw new UnreachableException($"Unexpected HTTP method: {context.Request.Method}.");
+        }
     }
 
-    public async Task HandleSseRequestAsync(HttpContext context)
+    public async Task HandleSseResponseAsync(HttpContext context)
     {
         var sessionId = MakeNewSessionId();
 
@@ -112,16 +120,10 @@ internal sealed class StreamableHttpHandler(
             return;
         }
 
-        var message = (IJsonRpcMessage?)await context.Request.ReadFromJsonAsync(McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(IJsonRpcMessage)), context.RequestAborted);
-        if (message is null)
-        {
-            await Results.BadRequest("No message in request body.").ExecuteAsync(context);
-            return;
-        }
-
-        await httpMcpSession.Transport.OnMessageReceivedAsync(message, context.RequestAborted);
-        context.Response.StatusCode = StatusCodes.Status202Accepted;
-        await context.Response.WriteAsync("Accepted");
+        // Full duplex messages are not supported by the Streamable HTTP spec, but it would be easy for us to support
+        // by running OnPostBodyReceivedAsync in parallel to the response writing loop in HandleSseRequestAsync.
+        await httpMcpSession.Transport.OnPostBodyReceivedAsync(context.Request.BodyReader, context.RequestAborted);
+        await HandleSseResponseAsync(context);
     }
 
     internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)

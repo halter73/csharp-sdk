@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,7 +9,6 @@ using ModelContextProtocol.Server;
 using ModelContextProtocol.Utils.Json;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Security.Cryptography;
 
 namespace ModelContextProtocol.AspNetCore;
 
@@ -26,11 +24,11 @@ internal sealed class SseHandler(
 
     public async Task HandleRequestAsync(HttpContext context)
     {
-        if (context.Request.Method == HttpMethods.Get)
+        if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
             await HandleSseRequestAsync(context);
         }
-        else if (context.Request.Method == HttpMethods.Post)
+        else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
             await HandleMessageRequestAsync(context);
         }
