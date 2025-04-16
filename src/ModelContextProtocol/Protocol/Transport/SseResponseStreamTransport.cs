@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Utils.Json;
+using ModelContextProtocol.Utils;
 
 namespace ModelContextProtocol.Protocol.Transport;
 
@@ -84,6 +85,8 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// <inheritdoc/>
     public async Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
     {
+        Throw.IfNull(message);
+
         if (!_isConnected)
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
@@ -117,6 +120,8 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// </remarks>
     public async Task OnMessageReceivedAsync(IJsonRpcMessage message, CancellationToken cancellationToken)
     {
+        Throw.IfNull(message);
+
         if (!_isConnected)
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
