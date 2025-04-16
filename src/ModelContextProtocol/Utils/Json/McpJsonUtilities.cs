@@ -83,6 +83,7 @@ public static partial class McpJsonUtilities
     
     // JSON-RPC
     [JsonSerializable(typeof(IJsonRpcMessage))]
+    [JsonSerializable(typeof(IJsonRpcMessage[]))]
     [JsonSerializable(typeof(JsonRpcRequest))]
     [JsonSerializable(typeof(JsonRpcNotification))]
     [JsonSerializable(typeof(JsonRpcResponse))]
