@@ -1,10 +1,9 @@
-using System.Text;
+using ModelContextProtocol.Protocol.Messages;
+using ModelContextProtocol.Utils.Json;
 using System.Buffers;
 using System.Net.ServerSentEvents;
 using System.Text.Json;
 using System.Threading.Channels;
-using ModelContextProtocol.Protocol.Messages;
-using ModelContextProtocol.Utils.Json;
 
 namespace ModelContextProtocol.Protocol.Transport;
 
@@ -22,13 +21,8 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// such as when streaming completion results or providing progress updates during long-running operations.
 /// </para>
 /// </remarks>
-/// <param name="sseResponseStream">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
-/// <param name="messageEndpoint">
-/// The relative or absolute URI the client should use to post MCP JSON-RPC messages for this session.
-/// These messages should be passed to <see cref="OnMessageReceivedAsync(IJsonRpcMessage, CancellationToken)"/>.
-/// Defaults to "/message".
-/// </param>
-public sealed class SseResponseStreamTransport(Stream sseResponseStream, string messageEndpoint = "/message") : ITransport
+/// <param name="streamableHttpResponseStream">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
+public sealed class StreamableHttpResponseStreamTransport(Stream streamableHttpResponseStream) : ITransport
 {
     private readonly Channel<IJsonRpcMessage> _incomingChannel = CreateBoundedChannel<IJsonRpcMessage>();
     private readonly Channel<SseItem<IJsonRpcMessage?>> _outgoingSseChannel = CreateBoundedChannel<SseItem<IJsonRpcMessage?>>();
@@ -45,27 +39,14 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
     public Task RunAsync(CancellationToken cancellationToken)
     {
-        // The very first SSE event isn't really an IJsonRpcMessage, but there's no API to write a single item of a different type,
-        // so we fib and special-case the "endpoint" event type in the formatter.
-        if (!_outgoingSseChannel.Writer.TryWrite(new SseItem<IJsonRpcMessage?>(null, "endpoint")))
-        {
-            throw new InvalidOperationException($"You must call ${nameof(RunAsync)} before calling ${nameof(SendMessageAsync)}.");
-        }
-
         _isConnected = true;
 
         var sseItems = _outgoingSseChannel.Reader.ReadAllAsync(cancellationToken);
-        return _sseWriteTask = SseFormatter.WriteAsync(sseItems, sseResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
+        return _sseWriteTask = SseFormatter.WriteAsync(sseItems, streamableHttpResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
     }
 
     private void WriteJsonRpcMessageToBuffer(SseItem<IJsonRpcMessage?> item, IBufferWriter<byte> writer)
     {
-        if (item.EventType == "endpoint")
-        {
-            writer.Write(Encoding.UTF8.GetBytes(messageEndpoint));
-            return;
-        }
-
         JsonSerializer.Serialize(GetUtf8JsonWriter(writer), item.Data, McpJsonUtilities.JsonContext.Default.IJsonRpcMessage!);
     }
 
@@ -115,7 +96,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// sequencing of operations in the transport lifecycle.
     /// </para>
     /// </remarks>
-    public async Task OnMessageReceivedAsync(IJsonRpcMessage message, CancellationToken cancellationToken)
+    public async Task OnPostBodyReceivedAsync(IJsonRpcMessage message, CancellationToken cancellationToken)
     {
         if (!_isConnected)
         {
