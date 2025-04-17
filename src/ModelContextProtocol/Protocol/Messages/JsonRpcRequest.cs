@@ -15,12 +15,8 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// and return either a <see cref="JsonRpcResponse"/> with the result, or a <see cref="JsonRpcError"/>
 /// if the method execution fails.
 /// </remarks>
-public class JsonRpcRequest : JsonRpcMessage, IJsonRpcMessageWithId
+public class JsonRpcRequest : JsonRpcMessageWithId
 {
-    /// <inheritdoc/>
-    [JsonPropertyName("id")]
-    public RequestId Id { get; set; }
-
     /// <summary>
     /// Name of the method to invoke.
     /// </summary>
@@ -32,4 +28,15 @@ public class JsonRpcRequest : JsonRpcMessage, IJsonRpcMessageWithId
     /// </summary>
     [JsonPropertyName("params")]
     public JsonNode? Params { get; init; }
+
+    internal JsonRpcRequest WithId(RequestId id)
+    {
+        return new JsonRpcRequest
+        {
+            JsonRpc = JsonRpc,
+            Id = id,
+            Method = Method,
+            Params = Params
+        };
+    }
 }

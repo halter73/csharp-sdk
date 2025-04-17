@@ -82,7 +82,7 @@ internal sealed partial class SseClientSessionTransport : TransportBase
 
         string messageId = "(no id)";
 
-        if (message is IJsonRpcMessageWithId messageWithId)
+        if (message is JsonRpcMessageWithId messageWithId)
         {
             messageId = messageWithId.Id.ToString();
         }
@@ -252,7 +252,7 @@ internal sealed partial class SseClientSessionTransport : TransportBase
             }
 
             string messageId = "(no id)";
-            if (message is IJsonRpcMessageWithId messageWithId)
+            if (message is JsonRpcMessageWithId messageWithId)
             {
                 messageId = messageWithId.Id.ToString();
             }

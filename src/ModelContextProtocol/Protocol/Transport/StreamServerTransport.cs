@@ -66,7 +66,7 @@ public class StreamServerTransport : TransportBase
         using var _ = await _sendLock.LockAsync(cancellationToken).ConfigureAwait(false);
 
         string id = "(no id)";
-        if (message is IJsonRpcMessageWithId messageWithId)
+        if (message is JsonRpcMessageWithId messageWithId)
         {
             id = messageWithId.Id.ToString();
         }
@@ -112,7 +112,7 @@ public class StreamServerTransport : TransportBase
                     if (JsonSerializer.Deserialize(line, McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage))) is JsonRpcMessage message)
                     {
                         string messageId = "(no id)";
-                        if (message is IJsonRpcMessageWithId messageWithId)
+                        if (message is JsonRpcMessageWithId messageWithId)
                         {
                             messageId = messageWithId.Id.ToString();
                         }

@@ -82,7 +82,7 @@ internal class StreamClientSessionTransport : TransportBase
         }
 
         string id = "(no id)";
-        if (message is IJsonRpcMessageWithId messageWithId)
+        if (message is JsonRpcMessageWithId messageWithId)
         {
             id = messageWithId.Id.ToString();
         }
@@ -164,7 +164,7 @@ internal class StreamClientSessionTransport : TransportBase
             if (message != null)
             {
                 string messageId = "(no id)";
-                if (message is IJsonRpcMessageWithId messageWithId)
+                if (message is JsonRpcMessageWithId messageWithId)
                 {
                     messageId = messageWithId.Id.ToString();
                 }

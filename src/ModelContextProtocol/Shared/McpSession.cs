@@ -108,7 +108,7 @@ internal sealed partial class McpSession : IDisposable
                 _ = ProcessMessageAsync();
                 async Task ProcessMessageAsync()
                 {
-                    IJsonRpcMessageWithId? messageWithId = message as IJsonRpcMessageWithId;
+                    JsonRpcMessageWithId? messageWithId = message as JsonRpcMessageWithId;
                     CancellationTokenSource? combinedCts = null;
                     try
                     {
@@ -228,7 +228,7 @@ internal sealed partial class McpSession : IDisposable
                     await HandleNotification(notification, cancellationToken).ConfigureAwait(false);
                     break;
 
-                case IJsonRpcMessageWithId messageWithId:
+                case JsonRpcMessageWithId messageWithId:
                     HandleMessageWithId(message, messageWithId);
                     break;
 
@@ -272,7 +272,7 @@ internal sealed partial class McpSession : IDisposable
         await _notificationHandlers.InvokeHandlers(notification.Method, notification, cancellationToken).ConfigureAwait(false);
     }
 
-    private void HandleMessageWithId(JsonRpcMessage message, IJsonRpcMessageWithId messageWithId)
+    private void HandleMessageWithId(JsonRpcMessage message, JsonRpcMessageWithId messageWithId)
     {
         if (_pendingRequests.TryRemove(messageWithId.Id, out var tcs))
         {
@@ -357,7 +357,7 @@ internal sealed partial class McpSession : IDisposable
         // Set request ID
         if (request.Id.Id is null)
         {
-            request.Id = new RequestId(Interlocked.Increment(ref _nextRequestId));
+            request = request.WithId(new RequestId(Interlocked.Increment(ref _nextRequestId)));
         }
 
         _propagator.InjectActivityContext(activity, request);
@@ -530,7 +530,7 @@ internal sealed partial class McpSession : IDisposable
             // session and request id have high cardinality, so not applying to metric tags
             activity.AddTag("mcp.session.id", _sessionId);
 
-            if (message is IJsonRpcMessageWithId withId)
+            if (message is JsonRpcMessageWithId withId)
             {
                 activity.AddTag("mcp.request.id", withId.Id.Id?.ToString());
             }

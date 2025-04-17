@@ -17,12 +17,8 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// and optional additional data to provide more context about the error.
 /// </para>
 /// </remarks>
-public class JsonRpcError : JsonRpcMessage, IJsonRpcMessageWithId
+public class JsonRpcError : JsonRpcMessageWithId
 {
-    /// <inheritdoc />
-    [JsonPropertyName("id")]
-    public required RequestId Id { get; init; }
-
     /// <summary>
     /// Gets detailed error information for the failed request, containing an error code, 
     /// message, and optional additional data
