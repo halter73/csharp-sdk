@@ -33,9 +33,9 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
 {
     private readonly Channel<JsonRpcMessage> _incomingChannel = CreateBoundedChannel<JsonRpcMessage>();
     private readonly Channel<SseItem<JsonRpcMessage?>> _outgoingSseChannel = CreateBoundedChannel<SseItem<JsonRpcMessage?>>();
+    private SseJsonRpcMessageWriter _sseWriter = new(sseResponseStream, messageEndpoint);
 
     private Task? _sseWriteTask;
-    private Utf8JsonWriter? _jsonWriter;
     private bool _isConnected;
 
     /// <summary>
@@ -54,20 +54,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
         }
 
         _isConnected = true;
-
-        var sseItems = _outgoingSseChannel.Reader.ReadAllAsync(cancellationToken);
-        return _sseWriteTask = SseFormatter.WriteAsync(sseItems, sseResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
-    }
-
-    private void WriteJsonRpcMessageToBuffer(SseItem<JsonRpcMessage?> item, IBufferWriter<byte> writer)
-    {
-        if (item.EventType == "endpoint")
-        {
-            writer.Write(Encoding.UTF8.GetBytes(messageEndpoint));
-            return;
-        }
-
-        JsonSerializer.Serialize(GetUtf8JsonWriter(writer), item.Data, McpJsonUtilities.JsonContext.Default.JsonRpcMessage!);
+        return _sseWriteTask = _sseWriter.WriteAsync(_outgoingSseChannel.Reader, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -130,24 +117,11 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
-    private static Channel<T> CreateBoundedChannel<T>(int capacity = 1) =>
+    internal static Channel<T> CreateBoundedChannel<T>(int capacity = 1, BoundedChannelFullMode fullMode = BoundedChannelFullMode.Wait) =>
         Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
         {
             SingleReader = true,
             SingleWriter = false,
+            FullMode = fullMode,
         });
-
-    private Utf8JsonWriter GetUtf8JsonWriter(IBufferWriter<byte> writer)
-    {
-        if (_jsonWriter is null)
-        {
-            _jsonWriter = new Utf8JsonWriter(writer);
-        }
-        else
-        {
-            _jsonWriter.Reset(writer);
-        }
-
-        return _jsonWriter;
-    }
 }
