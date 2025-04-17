@@ -37,5 +37,10 @@ public record JsonRpcResponse : IJsonRpcMessageWithId, IJsonRpcMessageWithDestin
     public required JsonNode? Result { get; init; }
 
     /// <inheritdoc/>
-    internal ITransport? DestinationTransport { get; set; }
+    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
+    internal ITransport? DestinationTransport
+    {
+        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
+        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
+    }
 }

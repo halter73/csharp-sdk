@@ -34,6 +34,11 @@ public record JsonRpcError : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinati
     [JsonPropertyName("error")]
     public required JsonRpcErrorDetail Error { get; init; }
 
-     /// <inheritdoc/>
-     ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
+    /// <inheritdoc/>
+    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
+    internal ITransport? DestinationTransport
+    {
+        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
+        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
+    }
 }

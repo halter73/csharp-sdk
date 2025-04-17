@@ -2,7 +2,7 @@
 
 namespace ModelContextProtocol.Protocol.Messages;
 
-internal interface IJsonRpcMessageWithDestinationTransport
+internal interface IJsonRpcMessageWithDestinationTransport : IJsonRpcMessage
 {
     /// <summary>
     /// Used internally to support Streamable HTTP scenarios where the spec states that the server SHOULD

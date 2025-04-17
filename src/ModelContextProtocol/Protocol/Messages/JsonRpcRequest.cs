@@ -15,7 +15,7 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// and return either a <see cref="JsonRpcResponse"/> with the result, or a <see cref="JsonRpcError"/>
 /// if the method execution fails.
 /// </remarks>
-public record JsonRpcRequest : IJsonRpcMessageWithId
+public record JsonRpcRequest : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinationTransport
 {
     /// <inheritdoc />
     [JsonPropertyName("jsonrpc")]
@@ -40,4 +40,12 @@ public record JsonRpcRequest : IJsonRpcMessageWithId
     // Used internally to support Streamable HTTP scenarios where the spec states that the server SHOULD
     // send JSON-RPC responses as part of the HTTP response to the POST that included the JSON-RPC request.
     internal ITransport? SourceTransport { get; set; }
+
+    /// <inheritdoc/>
+    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
+    internal ITransport? DestinationTransport
+    {
+        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
+        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
+    }
 }

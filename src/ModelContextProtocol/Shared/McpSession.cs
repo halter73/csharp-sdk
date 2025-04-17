@@ -143,7 +143,7 @@ internal sealed partial class McpSession : IDisposable
                         if (!isUserCancellation && message is JsonRpcRequest request)
                         {
                             LogRequestHandlerException(EndpointName, request.Method, ex);
-                            await _transport.SendMessageAsync(new JsonRpcError
+                            await SendMessageAsync(new JsonRpcError
                             {
                                 Id = request.Id,
                                 JsonRpc = "2.0",
