@@ -1,11 +1,6 @@
-using System.Text;
-using System.Buffers;
-using System.Net.ServerSentEvents;
-using System.Text.Json;
-using System.Threading.Channels;
 using ModelContextProtocol.Protocol.Messages;
-using ModelContextProtocol.Utils.Json;
 using ModelContextProtocol.Utils;
+using System.Threading.Channels;
 
 namespace ModelContextProtocol.Protocol.Transport;
 
@@ -29,11 +24,14 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// These messages should be passed to <see cref="OnMessageReceivedAsync(JsonRpcMessage, CancellationToken)"/>.
 /// Defaults to "/message".
 /// </param>
-public sealed class SseResponseStreamTransport(Stream sseResponseStream, string messageEndpoint = "/message") : ITransport
+public sealed class SseResponseStreamTransport(Stream sseResponseStream, string? messageEndpoint = "/message") : ITransport
 {
-    private readonly Channel<JsonRpcMessage> _incomingChannel = CreateBoundedChannel<JsonRpcMessage>();
-    private readonly Channel<SseItem<JsonRpcMessage?>> _outgoingSseChannel = CreateBoundedChannel<SseItem<JsonRpcMessage?>>();
-    private SseJsonRpcMessageWriter _sseWriter = new(sseResponseStream, messageEndpoint);
+    private SseWriter _sseWriter = new(messageEndpoint);
+    private readonly Channel<JsonRpcMessage> _incomingChannel = Channel.CreateBounded<JsonRpcMessage>(new BoundedChannelOptions(1)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+    });
 
     private Task? _sseWriteTask;
     private bool _isConnected;
@@ -44,17 +42,11 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     /// </summary>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
-    public Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken)
     {
-        // The very first SSE event isn't really an IJsonRpcMessage, but there's no API to write a single item of a different type,
-        // so we fib and special-case the "endpoint" event type in the formatter.
-        if (!_outgoingSseChannel.Writer.TryWrite(new SseItem<JsonRpcMessage?>(null, "endpoint")))
-        {
-            throw new InvalidOperationException($"You must call ${nameof(RunAsync)} before calling ${nameof(SendMessageAsync)}.");
-        }
-
         _isConnected = true;
-        return _sseWriteTask = _sseWriter.WriteAsync(_outgoingSseChannel.Reader, cancellationToken);
+        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken);
+        await _sseWriteTask.ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -64,23 +56,20 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
     public ValueTask DisposeAsync()
     {
         _isConnected = false;
+        _sseWriter.Dispose();
         _incomingChannel.Writer.TryComplete();
-        _outgoingSseChannel.Writer.TryComplete();
         return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
     }
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        Throw.IfNull(message);
-
         if (!_isConnected)
         {
-            throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
+            throw new McpException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
 
-        // Emit redundant "event: message" lines for better compatibility with other SDKs.
-        await _outgoingSseChannel.Writer.WriteAsync(new SseItem<JsonRpcMessage?>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
+        await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -111,17 +100,9 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string 
 
         if (!_isConnected)
         {
-            throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
+            throw new McpException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }
-
-    internal static Channel<T> CreateBoundedChannel<T>(int capacity = 1, BoundedChannelFullMode fullMode = BoundedChannelFullMode.Wait) =>
-        Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = fullMode,
-        });
 }

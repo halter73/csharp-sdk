@@ -1,10 +1,5 @@
 using ModelContextProtocol.Protocol.Messages;
-using ModelContextProtocol.Utils;
-using ModelContextProtocol.Utils.Json;
-using System.Buffers;
 using System.IO.Pipelines;
-using System.Net.ServerSentEvents;
-using System.Text.Json;
 using System.Threading.Channels;
 
 namespace ModelContextProtocol.Protocol.Transport;
@@ -25,18 +20,51 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// </remarks>
 public sealed class StreamableHttpServerTransport : ITransport
 {
-    private readonly Channel<JsonRpcMessage> _incomingChannel = SseResponseStreamTransport.CreateBoundedChannel<JsonRpcMessage>();
     // For JsonRpcMessages without a RelatedTransport, we don't want a block just because the client didn't make a GET request to handle unsolicited messages.
-    private readonly Channel<SseItem<JsonRpcMessage>> _outgoingSseChannel = SseResponseStreamTransport.CreateBoundedChannel<SseItem<JsonRpcMessage>>(fullMode: BoundedChannelFullMode.DropOldest);
+    private readonly SseWriter _sseWriter = new(channelOptions: new BoundedChannelOptions(1)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+        FullMode = BoundedChannelFullMode.DropOldest,
+    });
+    private readonly Channel<JsonRpcMessage> _incomingChannel = Channel.CreateBounded<JsonRpcMessage>(new BoundedChannelOptions(1)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+    });
+
+    private Task? _sseWriteTask;
 
     /// <summary>
-    /// Starts the transport and writes the JSON-RPC messages sent via <see cref="SendMessageAsync"/>
+    /// Handles an optional SSE GET request a client using the Streamable HTTP transport might make by
+    /// writing any unsolicited JSON-RPC messages sent via <see cref="SendMessageAsync"/>
     /// to the SSE response stream until cancellation is requested or the transport is disposed.
     /// </summary>
+    /// <param name="sseResponseStream">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
-    public Task RunAsync(CancellationToken cancellationToken)
+    public async Task HandleGetRequest(Stream sseResponseStream, CancellationToken cancellationToken)
     {
+        if (_sseWriteTask is not null)
+        {
+            throw new McpException("Session resumption is not yet supported. Please start a new session.");
+        }
+
+        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken);
+        await _sseWriteTask.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles a Streamable HTTP POST request processing both the request body and response body ensuring that
+    /// <see cref="JsonRpcResponse"/> and other correlated messages are sent back to the client directly in response
+    /// to the <see cref="JsonRpcRequest"/> that initiated the message.
+    /// </summary>
+    /// <param name="httpBodies">The duplex pipe facilitates the reading and writing of HTTP request and response data.</param>
+    /// <param name="cancellationToken">This token allows for the operation to be canceled if needed.</param>
+    /// <returns>The method returns a task representing the asynchronous operation.</returns>
+    public async Task HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
+    {
+        await using var relatedTransport = new StreamableHttpPostTransport(_incomingChannel.Writer, httpBodies);
     }
 
     /// <inheritdoc/>
@@ -45,15 +73,13 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        Throw.IfNull(message);
-        // Emit redundant "event: message" lines for better compatibility with other SDKs.
-        await _outgoingSseChannel.Writer.WriteAsync(new SseItem<JsonRpcMessage>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
+        await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        _outgoingSseChannel.Writer.TryComplete();
+        _sseWriter.Dispose();
         return default;
     }
 }

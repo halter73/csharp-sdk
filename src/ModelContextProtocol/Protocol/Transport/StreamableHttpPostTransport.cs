@@ -3,7 +3,6 @@ using ModelContextProtocol.Utils;
 using ModelContextProtocol.Utils.Json;
 using System.Buffers;
 using System.IO.Pipelines;
-using System.Net.ServerSentEvents;
 using System.Text.Json;
 using System.Threading.Channels;
 
@@ -13,13 +12,10 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// Handles processing the request/response body pairs for the Streamable HTTP transport. This is typically used via
 /// <see cref="JsonRpcMessage.RelatedTransport"/>.
 /// </summary>
-internal sealed class StreamableHttpServerRelatedTransport(Channel<JsonRpcMessage>? incomingChannel, IDuplexPipe streamableHttpBodies) : ITransport
+internal sealed class StreamableHttpServerRelatedTransport(ChannelWriter<JsonRpcMessage>? incomingChannel, IDuplexPipe httpBodies) : ITransport
 {
-    private readonly Channel<SseItem<JsonRpcMessage?>> _outgoingSseChannel = SseResponseStreamTransport.CreateBoundedChannel<SseItem<JsonRpcMessage>>();
-    private SseJsonRpcMessageWriter _sseWriter = new(streamableHttpBodies.Output.AsStream());
-
+    private SseWriter _sseWriter = new();
     private Task? _sseWriteTask;
-    private bool _isConnected;
 
     /// <inheritdoc/>
     // REVIEW: Should we introduce a send-only interface for RelatedTransport?
@@ -33,39 +29,28 @@ internal sealed class StreamableHttpServerRelatedTransport(Channel<JsonRpcMessag
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        _isConnected = true;
-
         // The incomingChannel is null to handle the potential client GET request to handle unsolicited JsonRpcMessages.
         if (incomingChannel is not null)
         {
             // Full duplex messages are not supported by the Streamable HTTP spec, but it would be easy for us to support
             // by running OnPostBodyReceivedAsync in parallel to the response writing loop in HandleSseRequestAsync.
-            await OnPostBodyReceivedAsync(streamableHttpBodies.Input, cancellationToken);
+            await OnPostBodyReceivedAsync(httpBodies.Input, cancellationToken).ConfigureAwait(false);
         }
 
-        _sseWriteTask = _sseWriter.WriteAsync(_outgoingSseChannel.Reader, cancellationToken);
+        _sseWriteTask = _sseWriter.WriteAllAsync(httpBodies.Output.AsStream(), cancellationToken);
         await _sseWriteTask.ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        Throw.IfNull(message);
-
-        if (!_isConnected)
-        {
-            throw new InvalidOperationException($"Transport is not connected.");
-        }
-
-        // Emit redundant "event: message" lines for better compatibility with other SDKs.
-        await _outgoingSseChannel.Writer.WriteAsync(new SseItem<JsonRpcMessage?>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
+        await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
-        _isConnected = false;
-        _outgoingSseChannel.Writer.TryComplete();
+        _sseWriter.Dispose();
         return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
     }
 
@@ -120,7 +105,7 @@ internal sealed class StreamableHttpServerRelatedTransport(Channel<JsonRpcMessag
 
         // Really an assertion. This doesn't get called when incomingChannel is null.
         Throw.IfNull(incomingChannel);
-        await incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
+        await incomingChannel.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask<bool> IsJsonArrayAsync(PipeReader requestBody, CancellationToken cancellationToken)
