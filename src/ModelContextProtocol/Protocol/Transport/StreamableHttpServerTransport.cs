@@ -35,8 +35,8 @@ public sealed class StreamableHttpServerTransport : ITransport
     });
     private readonly CancellationTokenSource _disposeCts = new();
 
-    private int _getStarted;
     private Task? _sseWriteTask;
+    private int _getRequestStarted;
 
     /// <summary>
     /// Handles an optional SSE GET request a client using the Streamable HTTP transport might make by
@@ -48,7 +48,7 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
     public async Task HandleGetRequest(Stream sseResponseStream, CancellationToken cancellationToken)
     {
-        if (Interlocked.Exchange(ref _getStarted, 1) == 1)
+        if (Interlocked.Exchange(ref _getRequestStarted, 1) == 1)
         {
             throw new McpException("Session resumption is not yet supported. Please start a new session.");
         }
@@ -65,12 +65,16 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// </summary>
     /// <param name="httpBodies">The duplex pipe facilitates the reading and writing of HTTP request and response data.</param>
     /// <param name="cancellationToken">This token allows for the operation to be canceled if needed.</param>
-    /// <returns>The method returns a task representing the asynchronous operation.</returns>
-    public async Task HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
+    /// <returns>
+    /// True, if the request body contained a <see cref="JsonRpcRequest"/> and therefore an  <see cref="JsonRpcRequest"/> was
+    /// written to the HTTP response body. False, if nothing was written to the HTTP response body. The HTTP application should
+    /// typically respond with an empty 202 response in this scenario.
+    /// </returns>
+    public async Task<bool> HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
     {
         using var postCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
         await using var postTransport = new StreamableHttpPostTransport(_incomingChannel.Writer, httpBodies);
-        await postTransport.RunAsync(postCts.Token).ConfigureAwait(false);
+        return await postTransport.RunAsync(postCts.Token).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>

@@ -26,7 +26,7 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// </param>
 public sealed class SseResponseStreamTransport(Stream sseResponseStream, string? messageEndpoint = "/message") : ITransport
 {
-    private SseWriter _sseWriter = new(messageEndpoint);
+    private readonly SseWriter _sseWriter = new(messageEndpoint);
     private readonly Channel<JsonRpcMessage> _incomingChannel = Channel.CreateBounded<JsonRpcMessage>(new BoundedChannelOptions(1)
     {
         SingleReader = true,

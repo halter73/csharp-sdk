@@ -22,15 +22,26 @@ internal sealed class StreamableHttpHandler(
     private readonly ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> _sessions = new(StringComparer.Ordinal);
     private readonly ILogger _logger = loggerFactory.CreateLogger<StreamableHttpHandler>();
 
-    public async Task HandleRequestAsync(HttpContext context)
+    public async ValueTask HandleRequestAsync(HttpContext context)
     {
+        var session = await GetOrCreateSessionAsync(context).ConfigureAwait(false);
+
+        var response = context.Response;
+        response.Headers.ContentType = "text/event-stream";
+        response.Headers.CacheControl = "no-cache,no-store";
+
+        // Make sure we disable all response buffering for SSE
+        context.Response.Headers.ContentEncoding = "identity";
+        context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
+
         if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
+            await session.Transport.HandleGetRequest(context.Response.Body, context.RequestAborted);
             await HandleSseResponseAsync(context);
         }
         else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
-            await HandlePostRequestAsync(context);
+            await session.Transport.HandlePostRequest(context.Response.Body, context.RequestAborted);
         }
         else
         {
@@ -38,9 +49,9 @@ internal sealed class StreamableHttpHandler(
         }
     }
 
-    public async Task HandleSseResponseAsync(HttpContext context)
+    public async ValueTask HandleSseResponseAsync(HttpContext context)
     {
-        var sessionId = MakeNewSessionId();
+        var session = GetOrCreateSessionAsync(context);
 
         // If the server is shutting down, we need to cancel all SSE connections immediately without waiting for HostOptions.ShutdownTimeout
         // which defaults to 30 seconds.
@@ -50,13 +61,12 @@ internal sealed class StreamableHttpHandler(
         var response = context.Response;
         response.Headers.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache,no-store";
-        response.Headers["mcp-session-id"] = sessionId;
 
         // Make sure we disable all response buffering for SSE
         context.Response.Headers.ContentEncoding = "identity";
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
-        await using var transport = new StreamableHttpServerTransport(response.BodyWriter);
+        var transport = new StreamableHttpServerTransport(response.BodyWriter);
         var httpMcpSession = new HttpMcpSession<StreamableHttpServerTransport>(transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
@@ -100,7 +110,7 @@ internal sealed class StreamableHttpHandler(
         }
     }
 
-    public async Task HandlePostRequestAsync(HttpContext context)
+    public async ValueTask HandlePostRequestAsync(HttpContext context)
     {
         if (!context.Request.Query.TryGetValue("sessionId", out var sessionId))
         {
@@ -129,9 +139,52 @@ internal sealed class StreamableHttpHandler(
     internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)
         => session.RunAsync(requestAborted);
 
+    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>> GetOrCreateSessionAsync(HttpContext context)
+    {
+        var sessionId = context.Request.Headers["mcp-session-id"].ToString();
+
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            sessionId = MakeNewSessionId();
+            var newSession = await CreateSessionAsync(context).ConfigureAwait(false);
+
+            if (!_sessions.TryAdd(sessionId, newSession))
+            {
+                Debug.Fail("Unreachable given good entropy!");
+                throw new InvalidOperationException($"Session with ID '{sessionId}' has already been created.");
+            }
+
+            return newSession;
+        }
+
+        if (!_sessions.TryGetValue(sessionId, out var existingSession))
+        {
+            throw new McpException("Session ID not found.");
+        }
+
+        return existingSession;
+    }
+
+    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>> CreateSessionAsync(HttpContext context)
+    {
+        var mcpServerOptions = mcpServerOptionsSnapshot.Value;
+        if (httpMcpServerOptions.Value.ConfigureSessionOptions is { } configureSessionOptions)
+        {
+            mcpServerOptions = mcpServerOptionsFactory.Create(Options.DefaultName);
+            await configureSessionOptions(context, mcpServerOptions, context.RequestAborted);
+        }
+
+        var transport = new StreamableHttpServerTransport();
+        var server = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
+        return new HttpMcpSession<StreamableHttpServerTransport>(transport, context.User)
+        {
+            Server = server,
+            ServerRunTask = (httpMcpServerOptions.Value.RunSessionHandler ?? RunSessionAsync)(context, server, context.RequestAborted),
+        };
+    }
+
     internal static string MakeNewSessionId()
     {
-        // 128 bits
         Span<byte> buffer = stackalloc byte[16];
         RandomNumberGenerator.Fill(buffer);
         return WebEncoders.Base64UrlEncode(buffer);

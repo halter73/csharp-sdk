@@ -1,7 +1,9 @@
-﻿using ModelContextProtocol.Protocol.Messages;
+﻿using Microsoft.Extensions.AI;
+using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Utils;
 using ModelContextProtocol.Utils.Json;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -14,7 +16,9 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// </summary>
 internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>? incomingChannel, IDuplexPipe httpBodies) : ITransport
 {
-    private SseWriter _sseWriter = new();
+    private readonly SseWriter _sseWriter = new();
+    private readonly ConcurrentDictionary<RequestId, JsonRpcRequest> _pendingRequests = [];
+
     private Task? _sseWriteTask;
 
     /// <inheritdoc/>
@@ -27,7 +31,7 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
     /// </summary>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public async ValueTask<bool> RunAsync(CancellationToken cancellationToken)
     {
         // The incomingChannel is null to handle the potential client GET request to handle unsolicited JsonRpcMessages.
         if (incomingChannel is not null)
@@ -37,13 +41,28 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
             await OnPostBodyReceivedAsync(httpBodies.Input, cancellationToken).ConfigureAwait(false);
         }
 
+        if (_pendingRequests.IsEmpty)
+        {
+            // No requests were received, so we don't need to write anything to the SSE stream.
+            return false;
+        }
+
         _sseWriteTask = _sseWriter.WriteAllAsync(httpBodies.Output.AsStream(), cancellationToken);
         await _sseWriteTask.ConfigureAwait(false);
+        return true;
     }
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
+        if (message is JsonRpcResponse response)
+        {
+            if (_pendingRequests.TryRemove(response.Id, out _) && _pendingRequests.IsEmpty)
+            {
+                // Complete the SSE response stream.
+                _sseWriter.Dispose();
+            }
+        }
         await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
@@ -76,7 +95,7 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
     /// sequencing of operations in the transport lifecycle.
     /// </para>
     /// </remarks>
-    private async Task OnPostBodyReceivedAsync(PipeReader streamableHttpRequestBody, CancellationToken cancellationToken)
+    private async ValueTask OnPostBodyReceivedAsync(PipeReader streamableHttpRequestBody, CancellationToken cancellationToken)
     {
         if (!await IsJsonArrayAsync(streamableHttpRequestBody, cancellationToken).ConfigureAwait(false))
         {
@@ -94,16 +113,21 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
         }
     }
 
-    private async Task OnMessageReceivedAsync(JsonRpcMessage? message, CancellationToken cancellationToken)
+    private async ValueTask OnMessageReceivedAsync(JsonRpcMessage? message, CancellationToken cancellationToken)
     {
         if (message is null)
         {
             throw new McpException("Received invalid null message.");
         }
 
+        if (message is JsonRpcRequest request)
+        {
+            _pendingRequests[request.Id] = request;
+        }
+
         message.RelatedTransport = this;
 
-        // Really an assertion. This doesn't get called when incomingChannel is null.
+        // Really an assertion. This doesn't get called when incomingChannel is null for GET requests.
         Throw.IfNull(incomingChannel);
         await incomingChannel.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }

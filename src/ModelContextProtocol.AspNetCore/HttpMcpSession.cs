@@ -1,4 +1,4 @@
-﻿using ModelContextProtocol.Protocol.Transport;
+﻿using ModelContextProtocol.Server;
 using System.Security.Claims;
 
 namespace ModelContextProtocol.AspNetCore;
@@ -13,6 +13,9 @@ internal sealed class HttpMcpSession<TTransport>
 
     public TTransport Transport { get; }
     public (string Type, string Value, string Issuer)? UserIdClaim { get; }
+
+    public IMcpServer? Server { get; init; }
+    public Task? ServerRunTask { get; init; }
 
     public bool HasSameUserId(ClaimsPrincipal user)
         => UserIdClaim == GetUserIdClaim(user);
