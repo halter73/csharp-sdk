@@ -52,7 +52,7 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
         this[method] = async (request, cancellationToken) =>
         {
             TRequest? typedRequest = JsonSerializer.Deserialize(request.Params, requestTypeInfo);
-            object? result = await handler(typedRequest, request.DestinationTransport, cancellationToken).ConfigureAwait(false);
+            object? result = await handler(typedRequest, request.RelatedTransport, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.SerializeToNode(result, responseTypeInfo);
         };
     }

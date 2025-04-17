@@ -26,8 +26,8 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// <param name="streamableHttpResponseBody">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
 public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpResponseBody) : ITransport
 {
-    private readonly Channel<IJsonRpcMessage> _incomingChannel = CreateBoundedChannel<IJsonRpcMessage>();
-    private readonly Channel<SseItem<IJsonRpcMessage>> _outgoingSseChannel = CreateBoundedChannel<SseItem<IJsonRpcMessage>>();
+    private readonly Channel<JsonRpcMessage> _incomingChannel = CreateBoundedChannel<JsonRpcMessage>();
+    private readonly Channel<SseItem<JsonRpcMessage>> _outgoingSseChannel = CreateBoundedChannel<SseItem<JsonRpcMessage>>();
 
     private Task? _sseWriteTask;
     private Utf8JsonWriter? _jsonWriter;
@@ -47,13 +47,13 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
         return _sseWriteTask = SseFormatter.WriteAsync(sseItems, streamableHttpResponseBody.AsStream(), WriteJsonRpcMessageToBuffer, cancellationToken);
     }
 
-    private void WriteJsonRpcMessageToBuffer(SseItem<IJsonRpcMessage> item, IBufferWriter<byte> writer)
+    private void WriteJsonRpcMessageToBuffer(SseItem<JsonRpcMessage> item, IBufferWriter<byte> writer)
     {
-        JsonSerializer.Serialize(GetUtf8JsonWriter(writer), item.Data, McpJsonUtilities.JsonContext.Default.IJsonRpcMessage);
+        JsonSerializer.Serialize(GetUtf8JsonWriter(writer), item.Data, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.JsonContext.Default.JsonRpcMessage);
     }
 
     /// <inheritdoc/>
-    public ChannelReader<IJsonRpcMessage> MessageReader => _incomingChannel.Reader;
+    public ChannelReader<JsonRpcMessage> MessageReader => _incomingChannel.Reader;
 
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
@@ -65,7 +65,7 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
     }
 
     /// <inheritdoc/>
-    public async Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
+    public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(message);
 
@@ -75,7 +75,7 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
         }
 
         // Emit redundant "event: message" lines for better compatibility with other SDKs.
-        await _outgoingSseChannel.Writer.WriteAsync(new SseItem<IJsonRpcMessage>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
+        await _outgoingSseChannel.Writer.WriteAsync(new SseItem<JsonRpcMessage>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -109,13 +109,13 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
 
         if (!await IsJsonArrayAsync(streamableHttpRequestBody, cancellationToken).ConfigureAwait(false))
         {
-            var message = await JsonSerializer.DeserializeAsync(streamableHttpRequestBody.AsStream(), McpJsonUtilities.JsonContext.Default.IJsonRpcMessage, cancellationToken).ConfigureAwait(false);
+            var message = await JsonSerializer.DeserializeAsync(streamableHttpRequestBody.AsStream(), McpJsonUtilities.JsonContext.Default.JsonRpcMessage, cancellationToken).ConfigureAwait(false);
             await OnMessageReceivedAsync(message, cancellationToken).ConfigureAwait(false);
         }
         else
         {
             // Batched JSON-RPC message
-            var messages = JsonSerializer.DeserializeAsyncEnumerable(streamableHttpRequestBody.AsStream(), McpJsonUtilities.JsonContext.Default.IJsonRpcMessage, cancellationToken).ConfigureAwait(false);
+            var messages = JsonSerializer.DeserializeAsyncEnumerable(streamableHttpRequestBody.AsStream(), McpJsonUtilities.JsonContext.Default.JsonRpcMessage, cancellationToken).ConfigureAwait(false);
             await foreach (var message in messages.WithCancellation(cancellationToken))
             {
                 await OnMessageReceivedAsync(message, cancellationToken).ConfigureAwait(false);
@@ -123,7 +123,7 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
         }
     }
 
-    private async Task OnMessageReceivedAsync(IJsonRpcMessage? message, CancellationToken cancellationToken)
+    private async Task OnMessageReceivedAsync(JsonRpcMessage? message, CancellationToken cancellationToken)
     {
         if (!_isConnected)
         {
@@ -137,7 +137,7 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
 
         if (message is JsonRpcRequest request)
         {
-            request.SourceTransport = this;
+            request.RelatedTransport = this;
         }
 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);

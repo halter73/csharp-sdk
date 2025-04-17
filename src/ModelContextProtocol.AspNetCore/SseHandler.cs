@@ -119,7 +119,7 @@ internal sealed class SseHandler(
             return;
         }
 
-        var message = (IJsonRpcMessage?)await context.Request.ReadFromJsonAsync(McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(IJsonRpcMessage)), context.RequestAborted);
+        var message = (JsonRpcMessage?)await context.Request.ReadFromJsonAsync(McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage)), context.RequestAborted);
         if (message is null)
         {
             await Results.BadRequest("No message in request body.").ExecuteAsync(context);

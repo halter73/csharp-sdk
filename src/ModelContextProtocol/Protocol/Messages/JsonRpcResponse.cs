@@ -17,12 +17,8 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// This class represents a successful response with a result. For error responses, see <see cref="JsonRpcError"/>.
 /// </para>
 /// </remarks>
-public record JsonRpcResponse : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinationTransport
+public class JsonRpcResponse : JsonRpcMessage, IJsonRpcMessageWithId
 {
-    /// <inheritdoc />
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; init; } = "2.0";
-
     /// <inheritdoc />
     [JsonPropertyName("id")]
     public required RequestId Id { get; init; }
@@ -35,12 +31,4 @@ public record JsonRpcResponse : IJsonRpcMessageWithId, IJsonRpcMessageWithDestin
     /// </remarks>
     [JsonPropertyName("result")]
     public required JsonNode? Result { get; init; }
-
-    /// <inheritdoc/>
-    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
-    internal ITransport? DestinationTransport
-    {
-        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
-        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
-    }
 }

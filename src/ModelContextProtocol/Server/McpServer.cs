@@ -566,18 +566,15 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         // This will throws because the server must already be running for this class to be constructed, but it should give us a good Exception message.
         public Task RunAsync(CancellationToken cancellationToken = default) => server.RunAsync();
 
-        public Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
+        public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
         {
-            if (message is IJsonRpcMessageWithDestinationTransport messageWithTransport)
-            {
-                messageWithTransport.DestinationTransport ??= transport;
-            }
+            message.RelatedTransport = transport;
             return server.SendMessageAsync(message, cancellationToken);
         }
 
         public Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default)
         {
-            request.DestinationTransport ??= transport;
+            request.RelatedTransport = transport;
             return server.SendRequestAsync(request, cancellationToken);
         }
     }

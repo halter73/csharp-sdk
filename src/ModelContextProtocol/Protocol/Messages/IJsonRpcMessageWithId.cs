@@ -10,7 +10,7 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// The ID is used to correlate requests with their responses, allowing asynchronous
 /// communication where multiple requests can be sent without waiting for responses.
 /// </remarks>
-public interface IJsonRpcMessageWithId : IJsonRpcMessage
+public interface IJsonRpcMessageWithId
 {
     /// <summary>
     /// Gets the message identifier.

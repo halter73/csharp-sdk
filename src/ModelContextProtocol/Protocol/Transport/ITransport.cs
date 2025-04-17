@@ -40,7 +40,7 @@ public interface ITransport : IAsyncDisposable
     /// any already transmitted messages are consumed.
     /// </para>
     /// </remarks>
-    ChannelReader<IJsonRpcMessage> MessageReader { get; }
+    ChannelReader<JsonRpcMessage> MessageReader { get; }
 
     /// <summary>
     /// Sends a JSON-RPC message through the transport.
@@ -60,5 +60,5 @@ public interface ITransport : IAsyncDisposable
     /// rather than accessing this method directly.
     /// </para>
     /// </remarks>
-    Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default);
+    Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default);
 }

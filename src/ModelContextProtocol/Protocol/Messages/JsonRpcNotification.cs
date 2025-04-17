@@ -12,12 +12,8 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// They are useful for one-way communication, such as log notifications and progress updates.
 /// Unlike requests, notifications do not include an ID field, since there will be no response to match with it.
 /// </remarks>
-public record JsonRpcNotification : IJsonRpcMessage, IJsonRpcMessageWithDestinationTransport
+public class JsonRpcNotification : JsonRpcMessage
 {
-    /// <inheritdoc />
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; init; } = "2.0";
-
     /// <summary>
     /// Gets or sets the name of the notification method.
     /// </summary>
@@ -29,12 +25,4 @@ public record JsonRpcNotification : IJsonRpcMessage, IJsonRpcMessageWithDestinat
     /// </summary>
     [JsonPropertyName("params")]
     public JsonNode? Params { get; init; }
-
-    /// <inheritdoc/>
-    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
-    internal ITransport? DestinationTransport
-    {
-        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
-        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
-    }
 }

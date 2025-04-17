@@ -68,14 +68,14 @@ internal sealed partial class SseClientSessionTransport : TransportBase
 
     /// <inheritdoc/>
     public override async Task SendMessageAsync(
-        IJsonRpcMessage message,
+        JsonRpcMessage message,
         CancellationToken cancellationToken = default)
     {
         if (_messageEndpoint == null)
             throw new InvalidOperationException("Transport not connected");
 
         using var content = new StringContent(
-            JsonSerializer.Serialize(message, McpJsonUtilities.JsonContext.Default.IJsonRpcMessage),
+            JsonSerializer.Serialize(message, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.JsonContext.Default.JsonRpcMessage),
             Encoding.UTF8,
             "application/json"
         );
@@ -244,7 +244,7 @@ internal sealed partial class SseClientSessionTransport : TransportBase
 
         try
         {
-            var message = JsonSerializer.Deserialize(data, McpJsonUtilities.JsonContext.Default.IJsonRpcMessage);
+            var message = JsonSerializer.Deserialize(data, McpJsonUtilities.JsonContext.Default.JsonRpcMessage);
             if (message == null)
             {
                 LogTransportMessageParseUnexpectedTypeSensitive(Name, data);

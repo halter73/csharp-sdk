@@ -17,12 +17,8 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// and optional additional data to provide more context about the error.
 /// </para>
 /// </remarks>
-public record JsonRpcError : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinationTransport
+public class JsonRpcError : JsonRpcMessage, IJsonRpcMessageWithId
 {
-    /// <inheritdoc />
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; init; } = "2.0";
-
     /// <inheritdoc />
     [JsonPropertyName("id")]
     public required RequestId Id { get; init; }
@@ -33,12 +29,4 @@ public record JsonRpcError : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinati
     /// </summary>
     [JsonPropertyName("error")]
     public required JsonRpcErrorDetail Error { get; init; }
-
-    /// <inheritdoc/>
-    ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
-    internal ITransport? DestinationTransport
-    {
-        get => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport;
-        set => ((IJsonRpcMessageWithDestinationTransport)this).DestinationTransport = value;
-    }
 }

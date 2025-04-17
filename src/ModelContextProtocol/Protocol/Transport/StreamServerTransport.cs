@@ -56,7 +56,7 @@ public class StreamServerTransport : TransportBase
     }
 
     /// <inheritdoc/>
-    public override async Task SendMessageAsync(IJsonRpcMessage message, CancellationToken cancellationToken = default)
+    public override async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         if (!IsConnected)
         {
@@ -73,7 +73,7 @@ public class StreamServerTransport : TransportBase
 
         try
         {
-            await JsonSerializer.SerializeAsync(_outputStream, message, McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(IJsonRpcMessage)), cancellationToken).ConfigureAwait(false);
+            await JsonSerializer.SerializeAsync(_outputStream, message, McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage)), cancellationToken).ConfigureAwait(false);
             await _outputStream.WriteAsync(s_newlineBytes, cancellationToken).ConfigureAwait(false);
             await _outputStream.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -109,7 +109,7 @@ public class StreamServerTransport : TransportBase
 
                 try
                 {
-                    if (JsonSerializer.Deserialize(line, McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(IJsonRpcMessage))) is IJsonRpcMessage message)
+                    if (JsonSerializer.Deserialize(line, McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage))) is JsonRpcMessage message)
                     {
                         string messageId = "(no id)";
                         if (message is IJsonRpcMessageWithId messageWithId)
