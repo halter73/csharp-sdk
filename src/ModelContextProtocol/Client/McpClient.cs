@@ -59,7 +59,7 @@ internal sealed partial class McpClient : McpEndpoint, IMcpClient
 
                 RequestHandlers.Set(
                     RequestMethods.SamplingCreateMessage,
-                    (request, cancellationToken) => samplingHandler(
+                    (request, _, cancellationToken) => samplingHandler(
                         request,
                         request?.Meta?.ProgressToken is { } token ? new TokenProgress(this, token) : NullProgress.Instance,
                         cancellationToken),

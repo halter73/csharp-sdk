@@ -1,4 +1,5 @@
 using ModelContextProtocol.Protocol.Messages;
+using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Utils;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -34,6 +35,15 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
         JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TResponse> responseTypeInfo)
     {
+        Set(method, (request, transport, cancellationToken) => handler(request, cancellationToken), requestTypeInfo, responseTypeInfo);
+    }
+
+    public void Set<TRequest, TResponse>(
+        string method,
+        Func<TRequest?, ITransport?, CancellationToken, ValueTask<TResponse>> handler,
+        JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TResponse> responseTypeInfo)
+    {
         Throw.IfNull(method);
         Throw.IfNull(handler);
         Throw.IfNull(requestTypeInfo);
@@ -42,7 +52,7 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
         this[method] = async (request, cancellationToken) =>
         {
             TRequest? typedRequest = JsonSerializer.Deserialize(request.Params, requestTypeInfo);
-            object? result = await handler(typedRequest, cancellationToken).ConfigureAwait(false);
+            object? result = await handler(typedRequest, request.DestinationTransport, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.SerializeToNode(result, responseTypeInfo);
         };
     }
