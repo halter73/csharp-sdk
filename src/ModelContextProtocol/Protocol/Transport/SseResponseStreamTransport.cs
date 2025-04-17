@@ -33,7 +33,6 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
         SingleWriter = false,
     });
 
-    private Task? _sseWriteTask;
     private bool _isConnected;
 
     /// <summary>
@@ -45,30 +44,23 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         _isConnected = true;
-        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken);
-        await _sseWriteTask.ConfigureAwait(false);
+        await _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public ChannelReader<JsonRpcMessage> MessageReader => _incomingChannel.Reader;
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _isConnected = false;
-        _sseWriter.Dispose();
         _incomingChannel.Writer.TryComplete();
-        return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
+        await _sseWriter.DisposeAsync().ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        if (!_isConnected)
-        {
-            throw new McpException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
-        }
-
         await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 

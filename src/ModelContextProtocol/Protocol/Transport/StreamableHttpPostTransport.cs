@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.AI;
-using ModelContextProtocol.Protocol.Messages;
+﻿using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Utils;
 using ModelContextProtocol.Utils.Json;
 using System.Buffers;
@@ -18,8 +17,6 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
 {
     private readonly SseWriter _sseWriter = new();
     private readonly ConcurrentDictionary<RequestId, JsonRpcRequest> _pendingRequests = [];
-
-    private Task? _sseWriteTask;
 
     /// <inheritdoc/>
     // REVIEW: Should we introduce a send-only interface for RelatedTransport?
@@ -47,30 +44,29 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
             return false;
         }
 
-        _sseWriteTask = _sseWriter.WriteAllAsync(httpBodies.Output.AsStream(), cancellationToken);
-        await _sseWriteTask.ConfigureAwait(false);
+        await _sseWriter.WriteAllAsync(httpBodies.Output.AsStream(), cancellationToken).ConfigureAwait(false);
         return true;
     }
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
+        await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+
         if (message is JsonRpcResponse response)
         {
             if (_pendingRequests.TryRemove(response.Id, out _) && _pendingRequests.IsEmpty)
             {
-                // Complete the SSE response stream.
-                _sseWriter.Dispose();
+                // Complete the SSE response stream now that all pending requests have been processed.
+                await _sseWriter.DisposeAsync().ConfigureAwait(false);
             }
         }
-        await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        _sseWriter.Dispose();
-        return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
+        await _sseWriter.DisposeAsync().ConfigureAwait(false);
     }
 
     /// <summary>

@@ -20,23 +20,6 @@ internal sealed class SseHandler(
     ILoggerFactory loggerFactory)
 {
     private readonly ConcurrentDictionary<string, HttpMcpSession<SseResponseStreamTransport>> _sessions = new(StringComparer.Ordinal);
-    private readonly ILogger _logger = loggerFactory.CreateLogger<SseHandler>();
-
-    public async Task HandleRequestAsync(HttpContext context)
-    {
-        if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
-        {
-            await HandleSseRequestAsync(context);
-        }
-        else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
-        {
-            await HandleMessageRequestAsync(context);
-        }
-        else
-        {
-            throw new UnreachableException($"Unexpected HTTP method: {context.Request.Method}.");
-        }
-    }
 
     public async Task HandleSseRequestAsync(HttpContext context)
     {

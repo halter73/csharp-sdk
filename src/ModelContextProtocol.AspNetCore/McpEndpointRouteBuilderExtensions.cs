@@ -30,8 +30,8 @@ public static class McpEndpointRouteBuilderExtensions
 
         // Map legacy SSE endpoints
         var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();
-        routeGroup.MapGet("/sse", sseHandler.HandleRequestAsync);
-        routeGroup.MapPost("/message", sseHandler.HandleRequestAsync);
+        routeGroup.MapGet("/sse", sseHandler.HandleSseRequestAsync);
+        routeGroup.MapPost("/message", sseHandler.HandleMessageRequestAsync);
         return routeGroup;
     }
 }

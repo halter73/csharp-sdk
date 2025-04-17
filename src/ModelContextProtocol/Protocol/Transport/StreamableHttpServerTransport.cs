@@ -34,7 +34,6 @@ public sealed class StreamableHttpServerTransport : ITransport
     });
     private readonly CancellationTokenSource _disposeCts = new();
 
-    private Task? _sseWriteTask;
     private int _getRequestStarted;
 
     /// <summary>
@@ -53,8 +52,7 @@ public sealed class StreamableHttpServerTransport : ITransport
         }
 
         using var sseCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
-        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, sseCts.Token);
-        await _sseWriteTask.ConfigureAwait(false);
+        await _sseWriter.WriteAllAsync(sseResponseStream, sseCts.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -86,10 +84,16 @@ public sealed class StreamableHttpServerTransport : ITransport
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _disposeCts.Cancel();
-        _sseWriter.Dispose();
-        return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
+        try
+        {
+            await _sseWriter.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _disposeCts.Dispose();
+        }
     }
 }

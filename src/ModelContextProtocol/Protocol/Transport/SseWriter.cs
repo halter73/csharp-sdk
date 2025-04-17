@@ -9,7 +9,7 @@ using System.Threading.Channels;
 
 namespace ModelContextProtocol.Protocol.Transport;
 
-internal sealed class SseWriter(string? messageEndpoint = null, BoundedChannelOptions? channelOptions = null) : IDisposable
+internal sealed class SseWriter(string? messageEndpoint = null, BoundedChannelOptions? channelOptions = null) : IAsyncDisposable
 {
     private readonly Channel<SseItem<JsonRpcMessage?>> _messages = Channel.CreateBounded<SseItem<JsonRpcMessage?>>(channelOptions ?? new BoundedChannelOptions(1)
     {
@@ -18,6 +18,10 @@ internal sealed class SseWriter(string? messageEndpoint = null, BoundedChannelOp
     });
 
     private Utf8JsonWriter? _jsonWriter;
+    private Task? _sseWriteTask;
+
+    private readonly SemaphoreSlim _disposeLock = new(1, 1);
+    private bool _disposed;
 
     public Task WriteAllAsync(Stream sseResponseStream, CancellationToken cancellationToken)
     {
@@ -25,24 +29,52 @@ internal sealed class SseWriter(string? messageEndpoint = null, BoundedChannelOp
         // item of a different type, so we fib and special-case the "endpoint" event type in the formatter.
         if (messageEndpoint is not null && !_messages.Writer.TryWrite(new SseItem<JsonRpcMessage?>(null, "endpoint")))
         {
-            throw new InvalidOperationException($"You must call ${nameof(WriteAllAsync)} before calling ${nameof(SendMessageAsync)}.");
+            throw new InvalidOperationException("You must call RunAsync before calling SendMessageAsync.");
         }
 
-        return SseFormatter.WriteAsync(_messages.Reader.ReadAllAsync(cancellationToken), sseResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
+        _sseWriteTask = SseFormatter.WriteAsync(_messages.Reader.ReadAllAsync(cancellationToken), sseResponseStream, WriteJsonRpcMessageToBuffer, cancellationToken);
+        return _sseWriteTask;
     }
 
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(message);
 
+        // Don't throw an ODE, because this is disposed internally when the transport disconnects due to an abort
+        // or sending all the responses for the a give given Streamable HTTP POST request, so the user might not be at fault.
+        // REVIEW: There's precedence for no-oping here similar to writing to the response body of an aborted request in ASP.NET Core
+        // not throwing. If we did that, we'd have to be more careful to protect the ChannelWriter from also throwing.
+        if (_disposed)
+        {
+            throw new McpException($"Transport is no longer connected.");
+        }
+
         // Emit redundant "event: message" lines for better compatibility with other SDKs.
         await _messages.Writer.WriteAsync(new SseItem<JsonRpcMessage?>(message, SseParser.EventTypeDefault), cancellationToken).ConfigureAwait(false);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        using var _ = await _disposeLock.LockAsync().ConfigureAwait(false);
+
+        if (_disposed)
+        {
+            return;
+        }
+
         _messages.Writer.TryComplete();
-        _jsonWriter?.Dispose();
+        try
+        {
+            if (_sseWriteTask is not null)
+            {
+                await _sseWriteTask.ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _disposed = true;
+            _jsonWriter?.Dispose();
+        }
     }
 
     private void WriteJsonRpcMessageToBuffer(SseItem<JsonRpcMessage?> item, IBufferWriter<byte> writer)
