@@ -75,7 +75,7 @@ internal sealed partial class SseClientSessionTransport : TransportBase
             throw new InvalidOperationException("Transport not connected");
 
         using var content = new StringContent(
-            JsonSerializer.Serialize(message, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.JsonContext.Default.JsonRpcMessage),
+            JsonSerializer.Serialize(message, McpJsonUtilities.JsonContext.Default.JsonRpcMessage),
             Encoding.UTF8,
             "application/json"
         );

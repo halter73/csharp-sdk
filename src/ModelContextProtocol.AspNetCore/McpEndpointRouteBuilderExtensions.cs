@@ -13,7 +13,8 @@ public static class McpEndpointRouteBuilderExtensions
 {
     /// <summary>
     /// Sets up endpoints for handling MCP HTTP Streaming transport.
-    /// See <see href="https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http">the protocol specification</see> for details about the Streamable HTTP transport.
+    /// See <see href="https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http">the 2025-03-26 protocol specification</see> for details about the Streamable HTTP transport.
+    /// Also maps legacy SSE endpoints for backward compatibility at the path "/sse" and "/message". <see href="https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse">the 2024-11-05 protocol specification</see> for details about the HTTP with SSE transport.
     /// </summary>
     /// <param name="endpoints">The web application to attach MCP HTTP endpoints.</param>
     /// <param name="pattern">The route pattern prefix to map to.</param>
@@ -23,15 +24,17 @@ public static class McpEndpointRouteBuilderExtensions
         var streamableHttpHandler = endpoints.ServiceProvider.GetService<StreamableHttpHandler>() ??
             throw new InvalidOperationException("You must call WithHttpTransport(). Unable to find required services. Call builder.Services.AddMcpServer().WithHttpTransport() in application startup code.");
 
-        var routeGroup = endpoints.MapGroup(pattern);
-        routeGroup.MapMethods("",
-            [HttpMethods.Get, HttpMethods.Post, HttpMethods.Delete],
-            streamableHttpHandler.HandleRequestAsync);
+        var mcpGroup = endpoints.MapGroup(pattern);
+        mcpGroup.MapMethods("", [HttpMethods.Get, HttpMethods.Post, HttpMethods.Delete], streamableHttpHandler.HandleRequestAsync)
+            .WithDisplayName(b => $"MCP Streamable HTTP | {b.DisplayName}");
 
-        // Map legacy SSE endpoints
+        // Map legacy HTTP with SSE endpoints.
         var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();
-        routeGroup.MapGet("/sse", sseHandler.HandleSseRequestAsync);
-        routeGroup.MapPost("/message", sseHandler.HandleMessageRequestAsync);
-        return routeGroup;
+        var sseGroup = mcpGroup.MapGroup("");
+        sseGroup.MapGet("/sse", sseHandler.HandleSseRequestAsync);
+        sseGroup.MapPost("/message", sseHandler.HandleMessageRequestAsync);
+        sseGroup.WithDisplayName(b => $"MCP HTTP with SSE | {b.DisplayName}");
+
+        return mcpGroup;
     }
 }
