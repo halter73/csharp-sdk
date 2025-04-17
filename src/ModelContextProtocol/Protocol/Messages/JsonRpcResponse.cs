@@ -1,3 +1,4 @@
+using ModelContextProtocol.Protocol.Transport;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
@@ -16,7 +17,7 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// This class represents a successful response with a result. For error responses, see <see cref="JsonRpcError"/>.
 /// </para>
 /// </remarks>
-public record JsonRpcResponse : IJsonRpcMessageWithId
+public record JsonRpcResponse : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinationTransport
 {
     /// <inheritdoc />
     [JsonPropertyName("jsonrpc")]
@@ -34,4 +35,7 @@ public record JsonRpcResponse : IJsonRpcMessageWithId
     /// </remarks>
     [JsonPropertyName("result")]
     public required JsonNode? Result { get; init; }
+
+    /// <inheritdoc/>
+    internal ITransport? DestinationTransport { get; set; }
 }

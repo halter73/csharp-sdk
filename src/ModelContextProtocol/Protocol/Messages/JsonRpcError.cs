@@ -1,3 +1,4 @@
+using ModelContextProtocol.Protocol.Transport;
 using System.Text.Json.Serialization;
 
 namespace ModelContextProtocol.Protocol.Messages;
@@ -16,7 +17,7 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// and optional additional data to provide more context about the error.
 /// </para>
 /// </remarks>
-public record JsonRpcError : IJsonRpcMessageWithId
+public record JsonRpcError : IJsonRpcMessageWithId, IJsonRpcMessageWithDestinationTransport
 {
     /// <inheritdoc />
     [JsonPropertyName("jsonrpc")]
@@ -32,4 +33,7 @@ public record JsonRpcError : IJsonRpcMessageWithId
     /// </summary>
     [JsonPropertyName("error")]
     public required JsonRpcErrorDetail Error { get; init; }
+
+     /// <inheritdoc/>
+     ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
 }

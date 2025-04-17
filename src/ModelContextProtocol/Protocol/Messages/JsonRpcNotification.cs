@@ -1,3 +1,4 @@
+using ModelContextProtocol.Protocol.Transport;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
@@ -11,7 +12,7 @@ namespace ModelContextProtocol.Protocol.Messages;
 /// They are useful for one-way communication, such as log notifications and progress updates.
 /// Unlike requests, notifications do not include an ID field, since there will be no response to match with it.
 /// </remarks>
-public record JsonRpcNotification : IJsonRpcMessage
+public record JsonRpcNotification : IJsonRpcMessage, IJsonRpcMessageWithDestinationTransport
 {
     /// <inheritdoc />
     [JsonPropertyName("jsonrpc")]
@@ -28,4 +29,7 @@ public record JsonRpcNotification : IJsonRpcMessage
     /// </summary>
     [JsonPropertyName("params")]
     public JsonNode? Params { get; init; }
+
+    /// <inheritdoc/>
+     ITransport? IJsonRpcMessageWithDestinationTransport.DestinationTransport { get; set; }
 }

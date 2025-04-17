@@ -151,7 +151,8 @@ internal sealed partial class McpSession : IDisposable
                                 {
                                     Code = (ex as McpException)?.ErrorCode ?? ErrorCodes.InternalError,
                                     Message = ex.Message
-                                }
+                                },
+                                DestinationTransport = request.SourceTransport,
                             }, cancellationToken).ConfigureAwait(false);
                         }
                         else if (ex is not OperationCanceledException)
@@ -295,17 +296,18 @@ internal sealed partial class McpSession : IDisposable
         JsonNode? result = await handler(request, cancellationToken).ConfigureAwait(false);
         LogRequestHandlerCompleted(EndpointName, request.Method);
 
-        await _transport.SendMessageAsync(new JsonRpcResponse
+        await SendMessageAsync(new JsonRpcResponse
         {
             Id = request.Id,
             JsonRpc = "2.0",
-            Result = result
+            Result = result,
+            DestinationTransport = request.SourceTransport,
         }, cancellationToken).ConfigureAwait(false);
 
         return result;
     }
 
-    private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken, RequestId requestId)
+    private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken, JsonRpcRequest request)
     {
         if (!cancellationToken.CanBeCanceled)
         {
@@ -314,13 +316,14 @@ internal sealed partial class McpSession : IDisposable
 
         return cancellationToken.Register(static objState =>
         {
-            var state = (Tuple<McpSession, RequestId>)objState!;
+            var state = (Tuple<McpSession, JsonRpcRequest>)objState!;
             _ = state.Item1.SendMessageAsync(new JsonRpcNotification
             {
                 Method = NotificationMethods.CancelledNotification,
-                Params = JsonSerializer.SerializeToNode(new CancelledNotification { RequestId = state.Item2 }, McpJsonUtilities.JsonContext.Default.CancelledNotification)
+                Params = JsonSerializer.SerializeToNode(new CancelledNotification { RequestId = state.Item2.Id }, McpJsonUtilities.JsonContext.Default.CancelledNotification),
+                DestinationTransport = state.Item2.SourceTransport,
             });
-        }, Tuple.Create(this, requestId));
+        }, Tuple.Create(this, request));
     }
 
     public IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler)
@@ -387,7 +390,7 @@ internal sealed partial class McpSession : IDisposable
             // case the server could ignore it.
             LogRequestSentAwaitingResponse(EndpointName, request.Method, request.Id);
             IJsonRpcMessage? response;
-            using (var registration = RegisterCancellation(cancellationToken, request.Id))
+            using (var registration = RegisterCancellation(cancellationToken, request))
             {
                 response = await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }

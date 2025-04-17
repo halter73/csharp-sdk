@@ -29,4 +29,26 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
     }
+
+    [Fact]
+    public async Task InitializeResultResponse_FromCustomRoute_Includes_McpSessionIdHeader()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport();
+        await using var app = Builder.Build();
+        app.MapMcp("/mcp");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        const string initializeRequest = """
+            {"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"IntegrationTestClient","version":"1.0.0"}}}
+            """;
+
+        using var initializeRequestBody = new StringContent(initializeRequest, Encoding.UTF8, "application/json");
+        using var postRequestMessage = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = initializeRequestBody,
+        };
+        var response = await HttpClient.SendAsync(postRequestMessage, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
+    }
 }

@@ -135,6 +135,11 @@ public sealed class StreamableHttpServerTransport(PipeWriter streamableHttpRespo
             throw new McpException("Received invalid null message.");
         }
 
+        if (message is JsonRpcRequest request)
+        {
+            request.SourceTransport = this;
+        }
+
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }
 

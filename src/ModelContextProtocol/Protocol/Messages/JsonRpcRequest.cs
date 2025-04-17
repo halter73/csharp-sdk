@@ -1,3 +1,4 @@
+using ModelContextProtocol.Protocol.Transport;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
@@ -35,4 +36,8 @@ public record JsonRpcRequest : IJsonRpcMessageWithId
     /// </summary>
     [JsonPropertyName("params")]
     public JsonNode? Params { get; init; }
+
+    // Used internally to support Streamable HTTP scenarios where the spec states that the server SHOULD
+    // send JSON-RPC responses as part of the HTTP response to the POST that included the JSON-RPC request.
+    internal ITransport? SourceTransport { get; set; }
 }
