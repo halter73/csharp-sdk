@@ -383,7 +383,7 @@ internal sealed partial class McpSession : IDisposable
                 LogSendingRequest(EndpointName, request.Method);
             }
 
-            await _transport.SendMessageAsync(request, cancellationToken).ConfigureAwait(false);
+            await SendToRelatedTransportAsync(request, cancellationToken).ConfigureAwait(false);
 
             // Now that the request has been sent, register for cancellation. If we registered before,
             // a cancellation request could arrive before the server knew about that request ID, in which
@@ -472,7 +472,7 @@ internal sealed partial class McpSession : IDisposable
                 LogSendingMessage(EndpointName);
             }
 
-            await _transport.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+            await SendToRelatedTransportAsync(message, cancellationToken).ConfigureAwait(false);
 
             // If the sent notification was a cancellation notification, cancel the pending request's await, as either the
             // server won't be sending a response, or per the specification, the response should be ignored. There are inherent
@@ -494,6 +494,12 @@ internal sealed partial class McpSession : IDisposable
             FinalizeDiagnostics(activity, startingTimestamp, durationMetric, ref tags);
         }
     }
+
+    // The JsonRpcMessage should be sent over the RelatedTransport if set. This is used to support the
+    // Streamable HTTP transport where the specification states that the server SHOULD include JSON-RPC responses in
+    // the HTTP response body for the POST request containing the corresponding JSON-RPC request.
+    private Task SendToRelatedTransportAsync(JsonRpcMessage message, CancellationToken cancellationToken)
+        => (message.RelatedTransport ?? _transport).SendMessageAsync(message, cancellationToken);
 
     private static CancelledNotification? GetCancelledNotificationParams(JsonNode? notificationParams)
     {

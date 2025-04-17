@@ -5,6 +5,7 @@ using ModelContextProtocol.Protocol.Types;
 using ModelContextProtocol.Shared;
 using ModelContextProtocol.Utils.Json;
 using System.Text.Json;
+using System.Threading;
 
 namespace ModelContextProtocol.Client;
 
@@ -76,7 +77,7 @@ internal sealed partial class McpClient : McpEndpoint, IMcpClient
 
                 RequestHandlers.Set(
                     RequestMethods.RootsList,
-                    rootsHandler,
+                    (request, _, cancellationToken) => rootsHandler(request, cancellationToken),
                     McpJsonUtilities.JsonContext.Default.ListRootsRequestParams,
                     McpJsonUtilities.JsonContext.Default.ListRootsResult);
             }

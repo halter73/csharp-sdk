@@ -31,15 +31,6 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
     /// </remarks>
     public void Set<TRequest, TResponse>(
         string method,
-        Func<TRequest?, CancellationToken, ValueTask<TResponse>> handler,
-        JsonTypeInfo<TRequest> requestTypeInfo,
-        JsonTypeInfo<TResponse> responseTypeInfo)
-    {
-        Set(method, (request, transport, cancellationToken) => handler(request, cancellationToken), requestTypeInfo, responseTypeInfo);
-    }
-
-    public void Set<TRequest, TResponse>(
-        string method,
         Func<TRequest?, ITransport?, CancellationToken, ValueTask<TResponse>> handler,
         JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TResponse> responseTypeInfo)
