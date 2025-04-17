@@ -1,4 +1,5 @@
 using ModelContextProtocol.Protocol.Messages;
+using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Threading.Channels;
 
@@ -32,7 +33,9 @@ public sealed class StreamableHttpServerTransport : ITransport
         SingleReader = true,
         SingleWriter = false,
     });
+    private readonly CancellationTokenSource _disposeCts = new();
 
+    private int _getStarted;
     private Task? _sseWriteTask;
 
     /// <summary>
@@ -45,12 +48,13 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
     public async Task HandleGetRequest(Stream sseResponseStream, CancellationToken cancellationToken)
     {
-        if (_sseWriteTask is not null)
+        if (Interlocked.Exchange(ref _getStarted, 1) == 1)
         {
             throw new McpException("Session resumption is not yet supported. Please start a new session.");
         }
 
-        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken);
+        using var sseCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        _sseWriteTask = _sseWriter.WriteAllAsync(sseResponseStream, sseCts.Token);
         await _sseWriteTask.ConfigureAwait(false);
     }
 
@@ -64,7 +68,9 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <returns>The method returns a task representing the asynchronous operation.</returns>
     public async Task HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
     {
-        await using var relatedTransport = new StreamableHttpPostTransport(_incomingChannel.Writer, httpBodies);
+        using var postCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        await using var postTransport = new StreamableHttpPostTransport(_incomingChannel.Writer, httpBodies);
+        await postTransport.RunAsync(postCts.Token).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -79,7 +85,8 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
+        _disposeCts.Cancel();
         _sseWriter.Dispose();
-        return default;
+        return new ValueTask(_sseWriteTask ?? Task.CompletedTask);
     }
 }

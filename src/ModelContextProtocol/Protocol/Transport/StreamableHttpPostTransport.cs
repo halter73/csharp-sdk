@@ -12,7 +12,7 @@ namespace ModelContextProtocol.Protocol.Transport;
 /// Handles processing the request/response body pairs for the Streamable HTTP transport. This is typically used via
 /// <see cref="JsonRpcMessage.RelatedTransport"/>.
 /// </summary>
-internal sealed class StreamableHttpServerRelatedTransport(ChannelWriter<JsonRpcMessage>? incomingChannel, IDuplexPipe httpBodies) : ITransport
+internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>? incomingChannel, IDuplexPipe httpBodies) : ITransport
 {
     private SseWriter _sseWriter = new();
     private Task? _sseWriteTask;
