@@ -463,7 +463,7 @@ internal sealed partial class McpSession : IDisposable
 
             if (_logger.IsEnabled(LogLevel.Trace))
             {
-                LogSendingMessageSensitive(EndpointName, JsonSerializer.Serialize(message, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.JsonContext.Default.JsonRpcMessage));
+                LogSendingMessageSensitive(EndpointName, JsonSerializer.Serialize(message, McpJsonUtilities.JsonContext.Default.JsonRpcMessage));
             }
             else
             {

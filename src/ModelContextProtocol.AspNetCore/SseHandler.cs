@@ -56,7 +56,7 @@ internal sealed class SseHandler(
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
         await using var transport = new SseResponseStreamTransport(response.Body, $"message?sessionId={sessionId}");
-        var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(transport, context.User);
+        var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(sessionId, transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
             throw new UnreachableException($"Unreachable given good entropy! Session with ID '{sessionId}' has already been created.");

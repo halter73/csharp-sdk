@@ -3,12 +3,15 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Server;
+using ModelContextProtocol.Utils.Json;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization.Metadata;
 
 namespace ModelContextProtocol.AspNetCore;
 
@@ -18,21 +21,37 @@ internal sealed class StreamableHttpHandler(
     IOptions<HttpServerTransportOptions> httpMcpServerOptions,
     ILoggerFactory loggerFactory)
 {
+    private static JsonTypeInfo<JsonRpcError> s_errorTypeInfo = GetRequiredJsonTypeInfo<JsonRpcError>();
+
     public ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> Sessions { get; } = new(StringComparer.Ordinal);
 
     public async Task HandleRequestAsync(HttpContext context)
     {
-        var session = await GetOrCreateSessionAsync(context).ConfigureAwait(false);
+        var session = await GetOrCreateSessionAsync(context);
         if (session is null)
         {
             return;
         }
 
+        session.Reference();
+
+        try
+        {
+            await HandleRequestAsync(context, session);
+        }
+        finally
+        {
+            session.Unreference();
+        }
+    }
+
+    private async ValueTask HandleRequestAsync(HttpContext context, HttpMcpSession<StreamableHttpServerTransport> session)
+    {
         var response = context.Response;
         response.Headers.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache,no-store";
 
-        // Make sure we disable all response buffering for SSE
+        // Make sure we disable all response buffering for SSE.
         context.Response.Headers.ContentEncoding = "identity";
         context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
 
@@ -45,9 +64,18 @@ internal sealed class StreamableHttpHandler(
             var wroteResponse = await session.Transport.HandlePostRequest(new HttpDuplexPipe(context), context.RequestAborted);
             if (!wroteResponse)
             {
+                // We wound up writing nothing, so there should be no Content-Type response header.
                 response.Headers.ContentType = (string?)null;
                 response.StatusCode = StatusCodes.Status202Accepted;
             }
+        }
+        else if (string.Equals(HttpMethods.Delete, context.Request.Method, StringComparison.OrdinalIgnoreCase))
+        {
+            if (Sessions.TryRemove(session.Id, out var _))
+            {
+                await session.Transport.DisposeAsync();
+            }
+            return;
         }
         else
         {
@@ -61,33 +89,29 @@ internal sealed class StreamableHttpHandler(
     private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetOrCreateSessionAsync(HttpContext context)
     {
         var sessionId = context.Request.Headers["mcp-session-id"].ToString();
+        HttpMcpSession<StreamableHttpServerTransport>? session;
 
         if (string.IsNullOrEmpty(sessionId))
         {
-            sessionId = MakeNewSessionId();
-            var newSession = await CreateSessionAsync(context).ConfigureAwait(false);
+            session = await CreateSessionAsync(context);
 
-            if (!Sessions.TryAdd(sessionId, newSession))
+            if (!Sessions.TryAdd(session.Id, session))
             {
                 throw new UnreachableException($"Unreachable given good entropy! Session with ID '{sessionId}' has already been created.");
             }
-
-            return newSession;
         }
-
-        if (!Sessions.TryGetValue(sessionId, out var existingSession))
+        else
         {
-            await Results.BadRequest($"Session ID not found.").ExecuteAsync(context);
-            return null;
+            session = await GetSessionAsync(context, sessionId);
+
+            if (session is null)
+            {
+                return null;
+            }
         }
 
-        if (!existingSession.HasSameUserId(context.User))
-        {
-            await Results.Forbid().ExecuteAsync(context);
-            return null;
-        }
-
-        return existingSession;
+        context.Response.Headers["mcp-session-id"] = session.Id;
+        return session;
     }
 
     private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>> CreateSessionAsync(HttpContext context)
@@ -101,11 +125,35 @@ internal sealed class StreamableHttpHandler(
 
         var transport = new StreamableHttpServerTransport();
         var server = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
-        return new HttpMcpSession<StreamableHttpServerTransport>(transport, context.User)
+        return new HttpMcpSession<StreamableHttpServerTransport>(MakeNewSessionId(), transport, context.User)
         {
             Server = server,
             ServerRunTask = (httpMcpServerOptions.Value.RunSessionHandler ?? RunSessionAsync)(context, server, context.RequestAborted),
         };
+    }
+
+    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetSessionAsync(HttpContext context, string sessionId)
+    {
+        if (!Sessions.TryGetValue(sessionId, out var existingSession))
+        {
+            return existingSession;
+        }
+
+        // I'd consider making our ErrorCodes type public and reference that, but -32001 isn't part of the MCP standard.
+        // This is what the typescript-sdk currently does. One of the few other usages I found was from some
+        // Ethereum JSON-RPC documentation and this JSON-RPC library from Microsoft called StreamJsonRpc where it's called
+        // JsonRpcErrorCode.NoMarshaledObjectFound
+        // https://learn.microsoft.com/dotnet/api/streamjsonrpc.protocol.jsonrpcerrorcode?view=streamjsonrpc-2.9#fields
+        await Results.Json(new JsonRpcError
+        {
+            Error = new()
+            {
+                Code = -32001,
+                Message = "Session not found",
+            },
+        }, s_errorTypeInfo,
+        statusCode: StatusCodes.Status404NotFound).ExecuteAsync(context);
+        return null;
     }
 
     internal static string MakeNewSessionId()
@@ -113,6 +161,17 @@ internal sealed class StreamableHttpHandler(
         Span<byte> buffer = stackalloc byte[16];
         RandomNumberGenerator.Fill(buffer);
         return WebEncoders.Base64UrlEncode(buffer);
+    }
+
+    private static JsonTypeInfo<T> GetRequiredJsonTypeInfo<T>()
+    {
+        var options = McpJsonUtilities.DefaultOptions;
+        var typeInfo = options.GetTypeInfo(typeof(T));
+        if (typeInfo is null)
+        {
+            throw new UnreachableException($"Unable to resolve JsonTypeInfo<{typeof(T)}> from McpJsonUtilities.DefaultOptions.");
+        }
+        return (JsonTypeInfo<T>)typeInfo;
     }
 
     private class HttpDuplexPipe(HttpContext context) : IDuplexPipe

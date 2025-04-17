@@ -24,7 +24,9 @@ public static class McpEndpointRouteBuilderExtensions
             throw new InvalidOperationException("You must call WithHttpTransport(). Unable to find required services. Call builder.Services.AddMcpServer().WithHttpTransport() in application startup code.");
 
         var routeGroup = endpoints.MapGroup(pattern);
-        routeGroup.MapMethods("", [HttpMethods.Get, HttpMethods.Post], streamableHttpHandler.HandleRequestAsync);
+        routeGroup.MapMethods("",
+            [HttpMethods.Get, HttpMethods.Post, HttpMethods.Delete],
+            streamableHttpHandler.HandleRequestAsync);
 
         // Map legacy SSE endpoints
         var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();

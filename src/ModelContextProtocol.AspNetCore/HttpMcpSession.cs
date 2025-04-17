@@ -3,20 +3,32 @@ using System.Security.Claims;
 
 namespace ModelContextProtocol.AspNetCore;
 
-internal sealed class HttpMcpSession<TTransport>
+internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport transport, ClaimsPrincipal user)
 {
-    public HttpMcpSession(TTransport transport, ClaimsPrincipal user)
-    {
-        Transport = transport;
-        UserIdClaim = GetUserIdClaim(user);
-    }
+    private int _referenceCount;
 
-    public TTransport Transport { get; }
-    public (string Type, string Value, string Issuer)? UserIdClaim { get; }
-    public long LastActivityTicks { get; } = Environment.TickCount64;
+    public string Id { get; } = sessionId;
+    public TTransport Transport { get; } = transport;
+    public (string Type, string Value, string Issuer)? UserIdClaim { get; } = GetUserIdClaim(user);
+
+    public bool IsActive => _referenceCount > 0;
+    public long LastActivityTicks { get; private set; } = Environment.TickCount64;
 
     public IMcpServer? Server { get; init; }
     public Task? ServerRunTask { get; init; }
+
+    public void Reference()
+    {
+        Interlocked.Increment(ref _referenceCount);
+    }
+
+    public void Unreference()
+    {
+        if (Interlocked.Decrement(ref _referenceCount) == 0)
+        {
+            LastActivityTicks = Environment.TickCount64;
+        }
+    }
 
     public bool HasSameUserId(ClaimsPrincipal user)
         => UserIdClaim == GetUserIdClaim(user);
