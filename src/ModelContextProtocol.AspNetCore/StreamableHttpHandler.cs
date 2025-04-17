@@ -19,12 +19,15 @@ internal sealed class StreamableHttpHandler(
     IHostApplicationLifetime hostApplicationLifetime,
     ILoggerFactory loggerFactory)
 {
-    private readonly ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> _sessions = new(StringComparer.Ordinal);
-    private readonly ILogger _logger = loggerFactory.CreateLogger<StreamableHttpHandler>();
+    public ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> Sessions { get; } = new(StringComparer.Ordinal);
 
     public async ValueTask HandleRequestAsync(HttpContext context)
     {
         var session = await GetOrCreateSessionAsync(context).ConfigureAwait(false);
+        if (session is null)
+        {
+            return;
+        }
 
         var response = context.Response;
         response.Headers.ContentType = "text/event-stream";
@@ -37,7 +40,6 @@ internal sealed class StreamableHttpHandler(
         if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
             await session.Transport.HandleGetRequest(context.Response.Body, context.RequestAborted);
-            await HandleSseResponseAsync(context);
         }
         else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
         {
@@ -123,13 +125,6 @@ internal sealed class StreamableHttpHandler(
             await Results.BadRequest($"Session ID not found.").ExecuteAsync(context);
             return;
         }
-
-        if (!httpMcpSession.HasSameUserId(context.User))
-        {
-            await Results.Forbid().ExecuteAsync(context);
-            return;
-        }
-
         // Full duplex messages are not supported by the Streamable HTTP spec, but it would be easy for us to support
         // by running OnPostBodyReceivedAsync in parallel to the response writing loop in HandleSseRequestAsync.
         await httpMcpSession.Transport.OnPostBodyReceivedAsync(context.Request.BodyReader, context.RequestAborted);
@@ -139,7 +134,7 @@ internal sealed class StreamableHttpHandler(
     internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)
         => session.RunAsync(requestAborted);
 
-    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>> GetOrCreateSessionAsync(HttpContext context)
+    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetOrCreateSessionAsync(HttpContext context)
     {
         var sessionId = context.Request.Headers["mcp-session-id"].ToString();
 
@@ -148,18 +143,23 @@ internal sealed class StreamableHttpHandler(
             sessionId = MakeNewSessionId();
             var newSession = await CreateSessionAsync(context).ConfigureAwait(false);
 
-            if (!_sessions.TryAdd(sessionId, newSession))
+            if (!Sessions.TryAdd(sessionId, newSession))
             {
-                Debug.Fail("Unreachable given good entropy!");
-                throw new InvalidOperationException($"Session with ID '{sessionId}' has already been created.");
+                throw new UnreachableException($"Unreachable given good entropy! Session with ID '{sessionId}' has already been created.");
             }
 
             return newSession;
         }
 
-        if (!_sessions.TryGetValue(sessionId, out var existingSession))
+        if (!Sessions.TryGetValue(sessionId, out var existingSession))
         {
             throw new McpException("Session ID not found.");
+        }
+
+        if (!existingSession.HasSameUserId(context.User))
+        {
+            await Results.Forbid().ExecuteAsync(context);
+            return null;
         }
 
         return existingSession;

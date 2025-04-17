@@ -13,6 +13,7 @@ internal sealed class HttpMcpSession<TTransport>
 
     public TTransport Transport { get; }
     public (string Type, string Value, string Issuer)? UserIdClaim { get; }
+    public long LastActivityTicks { get; } = Environment.TickCount64;
 
     public IMcpServer? Server { get; init; }
     public Task? ServerRunTask { get; init; }

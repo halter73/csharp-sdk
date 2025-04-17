@@ -59,8 +59,7 @@ internal sealed class SseHandler(
         var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {
-            Debug.Fail("Unreachable given good entropy!");
-            throw new InvalidOperationException($"Session with ID '{sessionId}' has already been created.");
+            throw new UnreachableException($"Unreachable given good entropy! Session with ID '{sessionId}' has already been created.");
         }
 
         try
