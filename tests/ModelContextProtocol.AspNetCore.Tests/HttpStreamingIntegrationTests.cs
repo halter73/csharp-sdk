@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.ServerSentEvents;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
 namespace ModelContextProtocol.AspNetCore.Tests;
@@ -32,10 +33,9 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var initializeRequestBody = new StringContent(initializeRequest, Encoding.UTF8, "application/json");
         using var postRequestMessage = new HttpRequestMessage(HttpMethod.Post, "")
         {
-            Content = initializeRequestBody,
+            Content = new StringContent(initializeRequest, Encoding.UTF8, "application/json"),
         };
         using var response = await HttpClient.SendAsync(postRequestMessage, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -50,10 +50,9 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp("/mcp");
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var initializeRequestBody = new StringContent(initializeRequest, Encoding.UTF8, "application/json");
         using var postRequestMessage = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
-            Content = initializeRequestBody,
+            Content = new StringContent(initializeRequest, Encoding.UTF8, "application/json"),
         };
         using var response = await HttpClient.SendAsync(postRequestMessage, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -62,7 +61,7 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
     [Fact]
     public async Task SingleRequest_CompletesHttpResponse_AfterSendingJsonRpcResponse()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport();
+        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         await using var app = Builder.Build();
         app.MapMcp();
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -71,19 +70,17 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         // This should work with the default HttpCompletionOption.ResponseContentRead setting.
         using var response = await HttpClient.PostAsync("", initializeRequestBody, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sseItem = Assert.Single(await ReadSseAsync(response.Content).ToListAsync(TestContext.Current.CancellationToken));
+        var jsonRpcResponse = JsonSerializer.Deserialize(sseItem.Data, GetJsonTypeInfo<JsonRpcResponse>());
+        Assert.NotNull(jsonRpcResponse);
+        AssertServerInfo(jsonRpcResponse.Result);
     }
 
     [Fact]
     public async Task BatchedRequest_CompletesResponse_AfterSendingAllJsonRpcResponses()
     {
-        Builder.Services.AddMcpServer(options =>
-        {
-            options.ServerInfo = new()
-            {
-                Name = "TestServer",
-                Version = "73",
-            };
-        }).WithHttpTransport();
+        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         Builder.Services.AddSingleton(McpServerTool.Create(Echo));
         await using var app = Builder.Build();
         app.MapMcp();
@@ -93,14 +90,9 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         using var response = await HttpClient.PostAsync("", batchedRequestBody, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var responseBodyStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
-        var sseAsyncEnumerable = SseParser.Create(responseBodyStream).EnumerateAsync(TestContext.Current.CancellationToken);
-
         var eventCount = 0;
-        await foreach (SseItem<string> sseEvent in sseAsyncEnumerable.ConfigureAwait(false))
+        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content).ConfigureAwait(false))
         {
-            Assert.Equal("message", sseEvent.EventType);
-
             var jsonRpcResponse = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcResponse>());
             Assert.NotNull(jsonRpcResponse);
             var responseId = Assert.IsType<long>(jsonRpcResponse.Id.Id);
@@ -108,13 +100,10 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
             switch (responseId)
             {
                 case 1:
-                    var initializeResult = JsonSerializer.Deserialize(jsonRpcResponse.Result, GetJsonTypeInfo<InitializeResult>());
-                    Assert.Equal("TestServer", initializeResult?.ServerInfo.Name);
-                    Assert.Equal("73", initializeResult?.ServerInfo.Version);
+                    AssertServerInfo(jsonRpcResponse.Result);
                     break;
                 case 2:
-                    var callToolResponse = JsonSerializer.Deserialize(jsonRpcResponse.Result, GetJsonTypeInfo<CallToolResponse>());
-                    Assert.NotNull(callToolResponse);
+                    var callToolResponse = AssertType<CallToolResponse>(jsonRpcResponse.Result);
                     var callToolContent = Assert.Single(callToolResponse.Content);
                     Assert.Equal("text", callToolContent.Type);
                     Assert.Equal("Hello world!", callToolContent.Text);
@@ -129,8 +118,72 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         Assert.Equal(2, eventCount);
     }
 
+    [Fact]
+    public async Task DoubleInitializeRequest_Is_Rejected()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport();
+        await using var app = Builder.Build();
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var firstInitializeMessage = new HttpRequestMessage(HttpMethod.Post, "")
+        {
+            Content = new StringContent(initializeRequest, Encoding.UTF8, "application/json"),
+        };
+        using var firstInitializeResponse = await HttpClient.SendAsync(firstInitializeMessage, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, firstInitializeResponse.StatusCode);
+        var sessionId = Assert.Single(firstInitializeResponse.Headers.GetValues("mcp-session-id"));
+
+        using var secondInitializeMessage = new HttpRequestMessage(HttpMethod.Post, "")
+        {
+            Content = new StringContent(initializeRequest, Encoding.UTF8, "application/json"),
+            Headers =
+            {
+                { "mcp-session-id", sessionId },
+            },
+        };
+
+        using var response = await HttpClient.SendAsync(secondInitializeMessage, HttpCompletionOption.ResponseContentRead, TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+
     [McpServerTool(Name = "echo"), Description("Echoes the input back to the client.")]
-    public static string Echo(string message) => message;
+    private static string Echo(string message) => message;
+
+    private static void ConfigureServerInfo(McpServerOptions options)
+    {
+        options.ServerInfo = new Implementation
+        {
+            Name = "TestServer",
+            Version = "73",
+        };
+    }
+
+    private static T AssertType<T>(JsonNode? jsonNode)
+    {
+        var type = JsonSerializer.Deserialize<T>(jsonNode, GetJsonTypeInfo<T>());
+        Assert.NotNull(type);
+        return type;
+    }
+
+    private static void AssertServerInfo(JsonNode? result)
+    {
+        var initializeResult = AssertType<InitializeResult>(result);
+        Assert.Equal("TestServer", initializeResult.ServerInfo.Name);
+        Assert.Equal("73", initializeResult.ServerInfo.Version);
+    }
+
+    private static async IAsyncEnumerable<SseItem<string>> ReadSseAsync(HttpContent responseContent)
+    {
+        var responseStream = await responseContent.ReadAsStreamAsync(TestContext.Current.CancellationToken);
+        await foreach (var sseItem in SseParser.Create(responseStream).EnumerateAsync(TestContext.Current.CancellationToken))
+        {
+            Assert.Equal("message", sseItem.EventType);
+            yield return sseItem;
+        }
+    }
 
     private static JsonTypeInfo<T> GetJsonTypeInfo<T>() =>
         (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));

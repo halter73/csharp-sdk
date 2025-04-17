@@ -134,7 +134,7 @@ internal sealed class StreamableHttpHandler(
 
     private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetSessionAsync(HttpContext context, string sessionId)
     {
-        if (!Sessions.TryGetValue(sessionId, out var existingSession))
+        if (Sessions.TryGetValue(sessionId, out var existingSession))
         {
             return existingSession;
         }
