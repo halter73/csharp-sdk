@@ -17,8 +17,8 @@ internal sealed class DestinationBoundMcpServer(McpServer server, ITransport? tr
 
     public IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler) => server.RegisterNotificationHandler(method, handler);
 
-    // This will throws because the server must already be running for this class to be constructed, but it should give us a good Exception message.
-    public Task RunAsync(CancellationToken cancellationToken = default) => server.RunAsync();
+    // This will throw because the server must already be running for this class to be constructed, but it should give us a good Exception message.
+    public Task RunAsync(CancellationToken cancellationToken) => server.RunAsync(cancellationToken);
 
     public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {

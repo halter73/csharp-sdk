@@ -1,4 +1,3 @@
-using ModelContextProtocol.Protocol.Transport;
 using System.Text.Json.Serialization;
 
 namespace ModelContextProtocol.Protocol.Messages;

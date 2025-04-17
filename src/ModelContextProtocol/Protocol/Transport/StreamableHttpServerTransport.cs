@@ -1,5 +1,4 @@
 using ModelContextProtocol.Protocol.Messages;
-using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Threading.Channels;
 
@@ -66,9 +65,9 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// <param name="httpBodies">The duplex pipe facilitates the reading and writing of HTTP request and response data.</param>
     /// <param name="cancellationToken">This token allows for the operation to be canceled if needed.</param>
     /// <returns>
-    /// True, if the request body contained a <see cref="JsonRpcRequest"/> and therefore an  <see cref="JsonRpcRequest"/> was
-    /// written to the HTTP response body. False, if nothing was written to the HTTP response body. The HTTP application should
-    /// typically respond with an empty 202 response in this scenario.
+    /// True, if data was written to the respond body.
+    /// False, if nothing was written because the request body did not contain any <see cref="JsonRpcRequest"/> messages to respond to.
+    /// The HTTP application should typically respond with an empty "202 Accepted" response in this scenario.
     /// </returns>
     public async Task<bool> HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
     {

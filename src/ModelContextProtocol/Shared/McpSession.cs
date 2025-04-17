@@ -146,7 +146,6 @@ internal sealed partial class McpSession : IDisposable
                             await SendMessageAsync(new JsonRpcError
                             {
                                 Id = request.Id,
-                                JsonRpc = "2.0",
                                 Error = new JsonRpcErrorDetail
                                 {
                                     Code = (ex as McpException)?.ErrorCode ?? ErrorCodes.InternalError,
@@ -159,7 +158,7 @@ internal sealed partial class McpSession : IDisposable
                         {
                             if (_logger.IsEnabled(LogLevel.Trace))
                             {
-                                LogMessageHandlerExceptionSensitive(EndpointName, message.GetType().Name, JsonSerializer.Serialize(message, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<JsonRpcMessage>)McpJsonUtilities.JsonContext.Default.JsonRpcMessage), ex);
+                                LogMessageHandlerExceptionSensitive(EndpointName, message.GetType().Name, JsonSerializer.Serialize(message, McpJsonUtilities.JsonContext.Default.JsonRpcMessage), ex);
                             }
                             else
                             {
@@ -299,7 +298,6 @@ internal sealed partial class McpSession : IDisposable
         await SendMessageAsync(new JsonRpcResponse
         {
             Id = request.Id,
-            JsonRpc = "2.0",
             Result = result,
             RelatedTransport = request.RelatedTransport,
         }, cancellationToken).ConfigureAwait(false);

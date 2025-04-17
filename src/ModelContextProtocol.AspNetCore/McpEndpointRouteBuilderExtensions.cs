@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Routing;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.AspNetCore;
 using System.Diagnostics.CodeAnalysis;
@@ -23,11 +24,10 @@ public static class McpEndpointRouteBuilderExtensions
             throw new InvalidOperationException("You must call WithHttpTransport(). Unable to find required services. Call builder.Services.AddMcpServer().WithHttpTransport() in application startup code.");
 
         var routeGroup = endpoints.MapGroup(pattern);
-        routeGroup.MapPost("", streamableHttpHandler.HandleRequestAsync);
+        routeGroup.MapMethods("", [HttpMethods.Get, HttpMethods.Post], streamableHttpHandler.HandleRequestAsync);
 
         // Map legacy SSE endpoints
         var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();
-        routeGroup.MapGet("", sseHandler.HandleRequestAsync);
         routeGroup.MapGet("/sse", sseHandler.HandleRequestAsync);
         routeGroup.MapPost("/message", sseHandler.HandleRequestAsync);
         return routeGroup;
