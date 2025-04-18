@@ -200,6 +200,7 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
 
         await CallInitializeAndValidateAsync();
         await CallEchoAndValidateAsync();
+        await CallEchoAndValidateAsync();
     }
 
     [Fact]

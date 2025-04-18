@@ -160,7 +160,7 @@ internal sealed class StreamableHttpHandler(
         var transport = new StreamableHttpServerTransport();
         // Use applicationServices instead of RequestServices since the session will likely outlive the first initialization request.
         var server = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, applicationServices);
-        return new HttpMcpSession<StreamableHttpServerTransport>(MakeNewSessionId(), transport, context.User)
+        return new HttpMcpSession<StreamableHttpServerTransport>(MakeNewSessionId(), transport, context.User, httpMcpServerOptions.Value.TimeProvider)
         {
             Server = server,
             ServerRunTask = (httpMcpServerOptions.Value.RunSessionHandler ?? RunSessionAsync)(context, server, context.RequestAborted),

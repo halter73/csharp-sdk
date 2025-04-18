@@ -3,7 +3,7 @@ using System.Security.Claims;
 
 namespace ModelContextProtocol.AspNetCore;
 
-internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport transport, ClaimsPrincipal user)
+internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport transport, ClaimsPrincipal user, TimeProvider timeProvider)
 {
     private int _getStarted;
     private int _referenceCount;
@@ -13,7 +13,7 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
     public (string Type, string Value, string Issuer)? UserIdClaim { get; } = GetUserIdClaim(user);
 
     public bool IsActive => _referenceCount > 0;
-    public long LastActivityTicks { get; private set; } = Environment.TickCount64;
+    public long LastActivityTicks { get; private set; } = timeProvider.GetUtcNow().UtcTicks;
 
     public bool TryStartGet() => Interlocked.Exchange(ref _getStarted, 1) == 0;
 
@@ -23,7 +23,7 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
     public IDisposable AcquireReference()
     {
         Interlocked.Increment(ref _referenceCount);
-        return new UnreferenceDisposable(this);
+        return new UnreferenceDisposable(this, timeProvider);
     }
 
     public bool HasSameUserId(ClaimsPrincipal user)
@@ -49,13 +49,13 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
         return null;
     }
 
-    private sealed class UnreferenceDisposable(HttpMcpSession<TTransport> session) : IDisposable
+    private sealed class UnreferenceDisposable(HttpMcpSession<TTransport> session, TimeProvider timeProvider) : IDisposable
     {
         public void Dispose()
         {
             if (Interlocked.Decrement(ref session._referenceCount) == 0)
             {
-                session.LastActivityTicks = Environment.TickCount64;
+                session.LastActivityTicks = timeProvider.GetUtcNow().UtcTicks;
             }
         }
     }
