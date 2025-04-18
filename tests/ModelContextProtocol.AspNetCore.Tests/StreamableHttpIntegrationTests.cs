@@ -15,7 +15,7 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace ModelContextProtocol.AspNetCore.Tests;
 
-public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper)
+public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
 {
     private static string InitializeRequest => """
         {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"IntegrationTestClient","version":"1.0.0"}}}
@@ -33,13 +33,28 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         }
     }
 
+    private WebApplication? _app;
+    public async ValueTask DisposeAsync()
+    {
+        if (_app is not null)
+        {
+            await _app.DisposeAsync();
+        }
+        base.Dispose();
+    }
+
+    private async Task StartAsync()
+    {
+        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
+        _app = Builder.Build();
+        _app.MapMcp();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public async Task InitialPostResponse_Includes_McpSessionIdHeader()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport();
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -48,28 +63,63 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
-    public async Task PostRequest_IsRejected_WithoutJsonContentType()
+    public async Task PostRequest_IsUnsupportedMediaType_WithoutJsonContentType()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport();
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         using var response = await HttpClient.PostAsync("", new StringContent(InitializeRequest, Encoding.UTF8, "text/javascript"), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
     [Fact]
-    public async Task PostRequest_IsRejected_WithoutTextEventStreamAcceptHeader()
+    public async Task PostRequest_IsNotAcceptable_WithoutApplicationJsonAcceptHeader()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport();
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         HttpClient.DefaultRequestHeaders.Accept.Clear();
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
+
+    [Fact]
+    public async Task PostRequest_IsNotAcceptable_WithoutTextEventStreamAcceptHeader()
+    {
+        await StartAsync();
+
+        HttpClient.DefaultRequestHeaders.Accept.Clear();
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/json"));
+        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetRequest_IsNotAcceptable_WithoutTextEventStreamAcceptHeader()
+    {
+        await StartAsync();
+
+        HttpClient.DefaultRequestHeaders.Accept.Clear();
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/json"));
+        using var response = await HttpClient.GetAsync("", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostRequest_IsNotFound_WithUnrecognizedSessionId()
+    {
+        await StartAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "")
+        {
+            Content = JsonContent(EchoRequest),
+            Headers =
+            {
+                { "mcp-session-id", "fakeSession" },
+            },
+        };
+        using var response = await HttpClient.SendAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -87,10 +137,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     [Fact]
     public async Task SingleJsonRpcRequest_Completes_WithSseResponse()
     {
-        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         // This should work with the default HttpCompletionOption.ResponseContentRead setting.
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
@@ -103,9 +150,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         Builder.Services.AddSingleton(McpServerTool.Create(Echo));
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         using var response = await HttpClient.PostAsync("", JsonContent($"[{InitializeRequest},{EchoRequest}]"), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -140,9 +185,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         Builder.Services.AddSingleton(McpServerTool.Create(Echo));
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
@@ -157,9 +200,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         Builder.Services.AddSingleton(McpServerTool.Create(Echo));
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync();
 
         using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
