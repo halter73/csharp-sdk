@@ -5,7 +5,6 @@ using ModelContextProtocol.Protocol.Messages;
 using ModelContextProtocol.Protocol.Types;
 using ModelContextProtocol.Server;
 using ModelContextProtocol.Utils.Json;
-using System.ComponentModel;
 using System.Net;
 using System.Net.ServerSentEvents;
 using System.Text;
@@ -45,9 +44,25 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
     private async Task StartAsync()
     {
-        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("application/json"));
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
+
+        Builder.Services.AddMcpServer(options =>
+        {
+            options.ServerInfo = new Implementation
+            {
+                Name = "TestServer",
+                Version = "73",
+            };
+        }).WithHttpTransport();
+
+        Builder.Services.AddSingleton(McpServerTool.Create(EchoAsync));
+        Builder.Services.AddSingleton(McpServerTool.Create(LongRunningAsync));
+
         _app = Builder.Build();
+
         _app.MapMcp();
+
         await _app.StartAsync(TestContext.Current.CancellationToken);
     }
 
@@ -78,6 +93,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
         HttpClient.DefaultRequestHeaders.Accept.Clear();
         HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
+
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
     }
@@ -90,6 +106,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
         HttpClient.DefaultRequestHeaders.Accept.Clear();
         HttpClient.DefaultRequestHeaders.Accept.Add(new("text/json"));
+
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
     }
@@ -101,6 +118,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
         HttpClient.DefaultRequestHeaders.Accept.Clear();
         HttpClient.DefaultRequestHeaders.Accept.Add(new("text/json"));
+
         using var response = await HttpClient.GetAsync("", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
     }
@@ -127,7 +145,9 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
+
         app.MapMcp("/mcp");
+
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var response = await HttpClient.PostAsync("/mcp", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
@@ -135,7 +155,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
-    public async Task SingleJsonRpcRequest_Completes_WithSseResponse()
+    public async Task SingleJsonRpcRequest_IsHandled_WithCompleteSseResponse()
     {
         await StartAsync();
 
@@ -146,10 +166,8 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
-    public async Task BatchedJsonRpcRequests_Completes_WithSseResponse()
+    public async Task BatchedJsonRpcRequests_IsHandled_WithCompleteSseResponse()
     {
-        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
-        Builder.Services.AddSingleton(McpServerTool.Create(Echo));
         await StartAsync();
 
         using var response = await HttpClient.PostAsync("", JsonContent($"[{InitializeRequest},{EchoRequest}]"), TestContext.Current.CancellationToken);
@@ -181,10 +199,8 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
-    public async Task MultipleSerialJsonRpcRequests_Complete_OneAtATime()
+    public async Task MultipleSerialJsonRpcRequests_IsHandled_OneAtATime()
     {
-        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
-        Builder.Services.AddSingleton(McpServerTool.Create(Echo));
         await StartAsync();
 
         using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
@@ -196,10 +212,8 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
-    public async Task MultipleConcurrentJsonRpcRequests_Complete_InParallel()
+    public async Task MultipleConcurrentJsonRpcRequests_IsHandled_InParallel()
     {
-        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
-        Builder.Services.AddSingleton(McpServerTool.Create(Echo));
         await StartAsync();
 
         using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
@@ -217,8 +231,21 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         await Task.WhenAll(echoTasks);
     }
 
-    [McpServerTool(Name = "echo"), Description("Echoes the input back to the client.")]
-    private static async Task<string> Echo(string message)
+    [Fact]
+    public async Task DeleteRequest_Complete_OneAtATime()
+    {
+        await StartAsync();
+
+        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
+        AssertServerInfo(initializeJsonRpcResponse);
+
+        var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
+        await CallEchoAndValidateAsync(sessionId);
+    }
+
+    [McpServerTool(Name = "echo")]
+    private static async Task<string> EchoAsync(string message)
     {
         // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
         // more explicit that we're not relying on synchronous execution of the tool.
@@ -226,13 +253,12 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         return message;
     }
 
-    private static void ConfigureServerInfo(McpServerOptions options)
+    [McpServerTool(Name = "long-running")]
+    private static async Task LongRunningAsync(CancellationToken cancellation)
     {
-        options.ServerInfo = new Implementation
-        {
-            Name = "TestServer",
-            Version = "73",
-        };
+        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
+        // more explicit that we're not relying on synchronous execution of the tool.
+        await Task.Delay(Timeout.Infinite, cancellation);
     }
 
     private static T AssertType<T>(JsonNode? jsonNode)
