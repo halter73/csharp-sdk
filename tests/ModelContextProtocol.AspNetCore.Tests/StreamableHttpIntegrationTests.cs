@@ -16,41 +16,11 @@ namespace ModelContextProtocol.AspNetCore.Tests;
 
 public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
 {
-    private static string InitializeRequest => """
-        {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"IntegrationTestClient","version":"1.0.0"}}}
-        """;
-
-    private long _lastRequestId = 1;
-    private string EchoRequest
-    {
-        get
-        {
-            var id = Interlocked.Increment(ref _lastRequestId);
-            return $$$$"""
-                {"jsonrpc":"2.0","id":{{{{id}}}},"method":"tools/call","params":{"name":"echo","arguments":{"message":"Hello world! ({{{{id}}}})"}}}
-                """;
-        }
-    }
-
     private WebApplication? _app;
-    public async ValueTask DisposeAsync()
-    {
-        if (_app is not null)
-        {
-            await _app.DisposeAsync();
-        }
-        base.Dispose();
-    }
-
-    private void AddDefaultRequestHeaders()
-    {
-        HttpClient.DefaultRequestHeaders.Accept.Add(new("application/json"));
-        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
-    }
 
     private async Task StartAsync()
     {
-        AddDefaultRequestHeaders();
+        AddDefaultHttpClietRequestHeaders();
 
         Builder.Services.AddMcpServer(options =>
         {
@@ -69,6 +39,15 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         _app.MapMcp();
 
         await _app.StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_app is not null)
+        {
+            await _app.DisposeAsync();
+        }
+        base.Dispose();
     }
 
     [Fact]
@@ -148,7 +127,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     [Fact]
     public async Task InitializeRequest_Matches_CustomRoute()
     {
-        AddDefaultRequestHeaders();
+        AddDefaultHttpClietRequestHeaders();
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
 
@@ -158,6 +137,17 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
         using var response = await HttpClient.PostAsync("/custom-route", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostWithSingleNotification_IsAccepted_WithEmptyResponse()
+    {
+        await StartAsync();
+        await CallInitializeAndValidateAsync();
+
+        var response = await HttpClient.PostAsync("", JsonContent(ProgressNotification("1")), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -255,6 +245,12 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         await Task.Delay(Timeout.Infinite, cancellation);
     }
 
+    private void AddDefaultHttpClietRequestHeaders()
+    {
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("application/json"));
+        HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
+    }
+
     private static StringContent JsonContent(string json) => new StringContent(json, Encoding.UTF8, "application/json");
     private static JsonTypeInfo<T> GetJsonTypeInfo<T>() => (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));
 
@@ -302,6 +298,29 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
         Assert.NotNull(jsonRpcResponse);
         return jsonRpcResponse;
+    }
+
+    private static string InitializeRequest => """
+        {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"IntegrationTestClient","version":"1.0.0"}}}
+        """;
+
+    private long _lastRequestId = 1;
+    private string EchoRequest
+    {
+        get
+        {
+            var id = Interlocked.Increment(ref _lastRequestId);
+            return $$$$"""
+                {"jsonrpc":"2.0","id":{{{{id}}}},"method":"tools/call","params":{"name":"echo","arguments":{"message":"Hello world! ({{{{id}}}})"}}}
+                """;
+        }
+    }
+
+    private string ProgressNotification(string progress)
+    {
+        return $$$"""
+            {"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"","progress":{{{progress}}}}}
+            """;
     }
 
     private async Task CallInitializeAndValidateAsync()
