@@ -49,7 +49,7 @@ internal sealed partial class McpSession : IDisposable
 
     // This _sessionId is solely used to identify the session in telemetry and logs.
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
-    private long _nextRequestId;
+    private long _lastRequestId;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="McpSession"/> class.
@@ -355,7 +355,7 @@ internal sealed partial class McpSession : IDisposable
         // Set request ID
         if (request.Id.Id is null)
         {
-            request = request.WithId(new RequestId(Interlocked.Increment(ref _nextRequestId)));
+            request = request.WithId(new RequestId(Interlocked.Increment(ref _lastRequestId)));
         }
 
         _propagator.InjectActivityContext(activity, request);

@@ -17,12 +17,21 @@ namespace ModelContextProtocol.AspNetCore.Tests;
 
 public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper)
 {
-    private const string _initializeRequest = """
+    private static string InitializeRequest => """
         {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"IntegrationTestClient","version":"1.0.0"}}}
         """;
-    private const string _echoRequest = """
-        {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"Hello world!"}}}
-        """;
+
+    private long _lastRequestId = 1;
+    private string EchoRequest
+    {
+        get
+        {
+            var id = Interlocked.Increment(ref _lastRequestId);
+            return $$$$"""
+                {"jsonrpc":"2.0","id":{{{{id}}}},"method":"tools/call","params":{"name":"echo","arguments":{"message":"Hello world! ({{{{id}}}})"}}}
+                """;
+        }
+    }
 
     [Fact]
     public async Task InitializeRequestResponse_Includes_McpSessionIdHeader()
@@ -32,7 +41,7 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var response = await HttpClient.PostAsync("", JsonContent(_initializeRequest), TestContext.Current.CancellationToken);
+        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
     }
@@ -45,12 +54,12 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp("/mcp");
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var response = await HttpClient.PostAsync("/mcp", JsonContent(_initializeRequest), TestContext.Current.CancellationToken);
+        using var response = await HttpClient.PostAsync("/mcp", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
-    public async Task SingleJsonRpcRequest_Completes_SseResponse()
+    public async Task SingleJsonRpcRequest_Completes_WithSseResponse()
     {
         Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         await using var app = Builder.Build();
@@ -58,13 +67,13 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         // This should work with the default HttpCompletionOption.ResponseContentRead setting.
-        using var response = await HttpClient.PostAsync("", JsonContent(_initializeRequest), TestContext.Current.CancellationToken);
+        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         var jsonRpcResponse = await AssertSingleSseResponseAsync(response);
-        AssertServerInfo(jsonRpcResponse.Result);
+        AssertServerInfo(jsonRpcResponse);
     }
 
     [Fact]
-    public async Task BatchedJsonRpcRequests_Completes_SseResponse()
+    public async Task BatchedJsonRpcRequests_Completes_WithSseResponse()
     {
         Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
         Builder.Services.AddSingleton(McpServerTool.Create(Echo));
@@ -72,7 +81,7 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var response = await HttpClient.PostAsync("", JsonContent($"[{_initializeRequest},{_echoRequest}]"), TestContext.Current.CancellationToken);
+        using var response = await HttpClient.PostAsync("", JsonContent($"[{InitializeRequest},{EchoRequest}]"), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var eventCount = 0;
@@ -85,10 +94,10 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
             switch (responseId)
             {
                 case 1:
-                    AssertServerInfo(jsonRpcResponse.Result);
+                    AssertServerInfo(jsonRpcResponse);
                     break;
                 case 2:
-                    AssertEchoResponse(jsonRpcResponse.Result);
+                    AssertEchoResponse(jsonRpcResponse);
                     break;
                 default:
                     throw new Exception($"Unexpected response ID: {jsonRpcResponse.Id}");
@@ -109,27 +118,46 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         app.MapMcp();
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(_initializeRequest), TestContext.Current.CancellationToken);
+        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
-        AssertServerInfo(initializeJsonRpcResponse.Result);
+        AssertServerInfo(initializeJsonRpcResponse);
 
         var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
-        using var echoToolRequest = new HttpRequestMessage(HttpMethod.Post, "")
-        {
-            Content = JsonContent(_echoRequest),
-            Headers =
-            {
-                { "mcp-session-id", sessionId },
-            },
-        };
+        await CallEchoAndValidateAsync(sessionId);
+    }
 
-        using var echoToolResponse = await HttpClient.SendAsync(echoToolRequest, TestContext.Current.CancellationToken);
-        var rpcResponse = await AssertSingleSseResponseAsync(echoToolResponse);
-        AssertEchoResponse(rpcResponse.Result);
+    [Fact]
+    public async Task MultipleConcurrentJsonRpcRequests_Complete_InParallel()
+    {
+        Builder.Services.AddMcpServer(ConfigureServerInfo).WithHttpTransport();
+        Builder.Services.AddSingleton(McpServerTool.Create(Echo));
+        await using var app = Builder.Build();
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
+        AssertServerInfo(initializeJsonRpcResponse);
+
+        var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
+        var echoTask = new Task[100];
+
+        for (int i = 0; i < echoTask.Length; i++)
+        {
+            echoTask[i] = CallEchoAndValidateAsync(sessionId);
+        }
+
+        await Task.WhenAll(echoTask);
     }
 
     [McpServerTool(Name = "echo"), Description("Echoes the input back to the client.")]
-    private static string Echo(string message) => message;
+    private static async Task<string> Echo(string message)
+    {
+        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
+        // more explicit that we're not relying on synchronous execution of the tool.
+        await Task.Yield();
+        return message;
+    }
 
     private static void ConfigureServerInfo(McpServerOptions options)
     {
@@ -147,20 +175,20 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         return type;
     }
 
-    private static InitializeResult AssertServerInfo(JsonNode? result)
+    private static InitializeResult AssertServerInfo(JsonRpcResponse rpcResponse)
     {
-        var initializeResult = AssertType<InitializeResult>(result);
+        var initializeResult = AssertType<InitializeResult>(rpcResponse.Result);
         Assert.Equal("TestServer", initializeResult.ServerInfo.Name);
         Assert.Equal("73", initializeResult.ServerInfo.Version);
         return initializeResult;
     }
 
-    private static CallToolResponse AssertEchoResponse(JsonNode? result)
+    private static CallToolResponse AssertEchoResponse(JsonRpcResponse rpcResponse)
     {
-        var callToolResponse = AssertType<CallToolResponse>(result);
+        var callToolResponse = AssertType<CallToolResponse>(rpcResponse.Result);
         var callToolContent = Assert.Single(callToolResponse.Content);
         Assert.Equal("text", callToolContent.Type);
-        Assert.Equal("Hello world!", callToolContent.Text);
+        Assert.Equal($"Hello world! ({rpcResponse.Id})", callToolContent.Text);
         return callToolResponse;
     }
 
@@ -187,5 +215,21 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
 
         Assert.NotNull(jsonRpcResponse);
         return jsonRpcResponse;
+    }
+
+    private async Task CallEchoAndValidateAsync(string sessionId)
+    {
+        using var echoRequest = new HttpRequestMessage(HttpMethod.Post, "")
+        {
+            Content = JsonContent(EchoRequest),
+            Headers =
+            {
+                { "mcp-session-id", sessionId },
+            },
+        };
+
+        using var echoResponse = await HttpClient.SendAsync(echoRequest, TestContext.Current.CancellationToken);
+        var rpcResponse = await AssertSingleSseResponseAsync(echoResponse);
+        AssertEchoResponse(rpcResponse);
     }
 }

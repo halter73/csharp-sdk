@@ -73,7 +73,6 @@ internal sealed class SseWriter(string? messageEndpoint = null, BoundedChannelOp
         finally
         {
             _disposed = true;
-            _jsonWriter?.Dispose();
         }
     }
 
