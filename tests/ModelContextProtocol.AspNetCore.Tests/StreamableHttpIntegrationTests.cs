@@ -42,10 +42,15 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         base.Dispose();
     }
 
-    private async Task StartAsync()
+    private void AddDefaultRequestHeaders()
     {
         HttpClient.DefaultRequestHeaders.Accept.Add(new("application/json"));
         HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
+    }
+
+    private async Task StartAsync()
+    {
+        AddDefaultRequestHeaders();
 
         Builder.Services.AddMcpServer(options =>
         {
@@ -143,6 +148,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     [Fact]
     public async Task InitializeRequest_Matches_CustomRoute()
     {
+        AddDefaultRequestHeaders();
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
 
@@ -158,7 +164,6 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     public async Task SingleJsonRpcRequest_IsHandled_WithCompleteSseResponse()
     {
         await StartAsync();
-
         await CallInitializeAndValidateAsync();
     }
 
@@ -171,7 +176,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var eventCount = 0;
-        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content).ConfigureAwait(false))
+        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content))
         {
             var jsonRpcResponse = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcResponse>());
             Assert.NotNull(jsonRpcResponse);
