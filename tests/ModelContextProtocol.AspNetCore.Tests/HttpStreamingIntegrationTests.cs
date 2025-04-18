@@ -34,7 +34,7 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
     }
 
     [Fact]
-    public async Task InitializeRequestResponse_Includes_McpSessionIdHeader()
+    public async Task InitialPostResponse_Includes_McpSessionIdHeader()
     {
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
@@ -44,6 +44,18 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
+    }
+
+    [Fact]
+    public async Task PostRequest_IsRejected_WithoutJsonContentType()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport();
+        await using var app = Builder.Build();
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await HttpClient.PostAsync("", new StringContent(InitializeRequest, Encoding.UTF8, "text/javascript"), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
     [Fact]

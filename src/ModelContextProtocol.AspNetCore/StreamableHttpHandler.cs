@@ -146,16 +146,21 @@ internal sealed class StreamableHttpHandler(
         // Ethereum JSON-RPC documentation and this JSON-RPC library from Microsoft called StreamJsonRpc where it's called
         // JsonRpcErrorCode.NoMarshaledObjectFound
         // https://learn.microsoft.com/dotnet/api/streamjsonrpc.protocol.jsonrpcerrorcode?view=streamjsonrpc-2.9#fields
-        await Results.Json(new JsonRpcError
+        await WriteJsonRpcErrorAsync(context, -32001, "Session not found", StatusCodes.Status404NotFound);
+        return null;
+    }
+
+    private static Task WriteJsonRpcErrorAsync(HttpContext context, int errorCode, string errorMessage, int statusCode)
+    {
+        var jsonRpcError = new JsonRpcError
         {
             Error = new()
             {
-                Code = -32001,
-                Message = "Session not found",
+                Code = errorCode,
+                Message = errorMessage,
             },
-        }, s_errorTypeInfo,
-        statusCode: StatusCodes.Status404NotFound).ExecuteAsync(context);
-        return null;
+        };
+        return Results.Json(jsonRpcError, s_errorTypeInfo, statusCode: statusCode).ExecuteAsync(context);
     }
 
     internal static string MakeNewSessionId()
