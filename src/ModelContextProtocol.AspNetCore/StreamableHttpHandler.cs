@@ -95,6 +95,11 @@ internal sealed class StreamableHttpHandler(
 
         using var _ = session.AcquireReference();
         InitializeSseResponse(context);
+
+        // We should flush headers to indicate a 200 success quickly, because the initialization response
+        // will be sent in response to a different POST request. It might be a while before we send a message
+        // over this response body.
+        await context.Response.Body.FlushAsync(context.RequestAborted);
         await session.Transport.HandleGetRequest(context.Response.Body, context.RequestAborted);
     }
 

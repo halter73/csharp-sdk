@@ -185,7 +185,7 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
                     break;
                 default:
                     throw new Exception($"Unexpected response ID: {jsonRpcResponse.Id}");
-            };
+            }
 
             eventCount++;
         }
@@ -216,6 +216,45 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         }
 
         await Task.WhenAll(echoTasks);
+    }
+
+
+    [Fact]
+    public async Task GetRequest_Receives_UnsolicitedNotifications()
+    {
+        IMcpServer? server = null;
+
+        Builder.Services.AddMcpServer()
+            .WithHttpTransport(options =>
+            {
+                options.RunSessionHandler = (httpContext, mcpServer, cancellationToken) =>
+                {
+                    server = mcpServer;
+                    return mcpServer.RunAsync(cancellationToken);
+                };
+            });
+
+        await StartAsync();
+
+        await CallInitializeAndValidateAsync();
+        Assert.NotNull(server);
+
+        // Headers should be sent even before any messages are ready on the GET endpoint.
+        using var getResponse = await HttpClient.GetAsync("", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        async Task<string> GetFirstNotificationAsync()
+        {
+            await foreach (SseItem<string> sseEvent in ReadSseAsync(getResponse.Content))
+            {
+                var notification = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcNotification>());
+                Assert.NotNull(notification);
+                return notification.Method;
+            }
+
+            throw new Exception("No notifications received.");
+        }
+
+        await server.SendNotificationAsync("test-method", TestContext.Current.CancellationToken);
+        Assert.Equal("test-method", await GetFirstNotificationAsync());
     }
 
     [Fact]

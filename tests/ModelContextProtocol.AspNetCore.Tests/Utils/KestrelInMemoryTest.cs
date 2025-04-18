@@ -30,6 +30,7 @@ public class KestrelInMemoryTest : LoggedTest
         })
         {
             BaseAddress = new Uri("http://localhost:5000/"),
+            Timeout = TimeSpan.FromSeconds(10),
         };
     }
 
