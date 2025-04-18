@@ -14,7 +14,7 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace ModelContextProtocol.AspNetCore.Tests;
 
-public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
+public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
 {
     private static McpServerTool[] Tools { get; } = [
         McpServerTool.Create(EchoAsync),
@@ -26,13 +26,13 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
 
     private async Task StartAsync()
     {
-        AddDefaultHttpClietRequestHeaders();
+        AddDefaultHttpClientRequestHeaders();
 
         Builder.Services.AddMcpServer(options =>
         {
             options.ServerInfo = new Implementation
             {
-                Name = nameof(StreamableHttpIntegrationTests),
+                Name = nameof(StreamableHttpTests),
                 Version = "73",
             };
         }).WithTools(Tools).WithHttpTransport();
@@ -130,7 +130,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     [Fact]
     public async Task InitializeRequest_Matches_CustomRoute()
     {
-        AddDefaultHttpClietRequestHeaders();
+        AddDefaultHttpClientRequestHeaders();
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
 
@@ -232,6 +232,23 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     }
 
     [Fact]
+    public async Task DeleteRequest_CompletesSession_WhichCancelsLongRunningToolCall()
+    {
+        await StartAsync();
+
+        await CallInitializeAndValidateAsync();
+        var responseTask = HttpClient.PostAsync("", JsonContent(CallTool("long-running")), TestContext.Current.CancellationToken);
+        Assert.False(responseTask.IsCompleted);
+        await HttpClient.DeleteAsync("", TestContext.Current.CancellationToken);
+
+        using var response = await responseTask;
+        // Currently, the OCE thrown by the canceled session is unhandled and turned into a 500 error by Kestrel.
+        // The spec suggests sending CancelledNotifications. That would be good, but we can do that later.
+        // For now the important thing is that request completes without indicating success.
+        Assert.False(response.IsSuccessStatusCode);
+    }
+
+    [Fact]
     public async Task Progress_IsReported_InSameSseResponseAsRpcResponse()
     {
         await StartAsync();
@@ -265,7 +282,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         Assert.Equal(11, currentSseItem);
     }
 
-    private void AddDefaultHttpClietRequestHeaders()
+    private void AddDefaultHttpClientRequestHeaders()
     {
         HttpClient.DefaultRequestHeaders.Accept.Add(new("application/json"));
         HttpClient.DefaultRequestHeaders.Accept.Add(new("text/event-stream"));
@@ -334,6 +351,11 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
             """;
     }
 
+    private string CallTool(string toolName, string arguments = "{}") =>
+        Request("tools/call", $$"""
+            {"name":"{{toolName}}","arguments":{{arguments}}}
+            """);
+
     private string CallToolWithProgressToken(string toolName, string arguments = "{}") =>
         Request("tools/call", $$$"""
             {"name":"{{{toolName}}}","arguments":{{{arguments}}}, "_meta":{"progressToken": "abc123"}}
@@ -342,7 +364,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     private static InitializeResult AssertServerInfo(JsonRpcResponse rpcResponse)
     {
         var initializeResult = AssertType<InitializeResult>(rpcResponse.Result);
-        Assert.Equal(nameof(StreamableHttpIntegrationTests), initializeResult.ServerInfo.Name);
+        Assert.Equal(nameof(StreamableHttpTests), initializeResult.ServerInfo.Name);
         Assert.Equal("73", initializeResult.ServerInfo.Version);
         return initializeResult;
     }
