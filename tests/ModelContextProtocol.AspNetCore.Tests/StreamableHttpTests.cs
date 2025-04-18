@@ -232,20 +232,32 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
     }
 
     [Fact]
-    public async Task DeleteRequest_CompletesSession_WhichCancelsLongRunningToolCall()
+    public async Task DeleteRequest_CompletesSession_WhichCancelsLongRunningToolCalls()
     {
         await StartAsync();
 
         await CallInitializeAndValidateAsync();
-        var responseTask = HttpClient.PostAsync("", JsonContent(CallTool("long-running")), TestContext.Current.CancellationToken);
-        Assert.False(responseTask.IsCompleted);
+
+        Task<HttpResponseMessage> CallLongRunningToolAsync() =>
+            HttpClient.PostAsync("", JsonContent(CallTool("long-running")), TestContext.Current.CancellationToken);
+
+        var longRunningToolTasks = new Task<HttpResponseMessage>[10];
+        for (int i = 0; i < longRunningToolTasks.Length; i++)
+        {
+            longRunningToolTasks[i] = CallLongRunningToolAsync();
+            Assert.False(longRunningToolTasks[i].IsCompleted);
+        }
         await HttpClient.DeleteAsync("", TestContext.Current.CancellationToken);
 
-        using var response = await responseTask;
         // Currently, the OCE thrown by the canceled session is unhandled and turned into a 500 error by Kestrel.
         // The spec suggests sending CancelledNotifications. That would be good, but we can do that later.
         // For now the important thing is that request completes without indicating success.
-        Assert.False(response.IsSuccessStatusCode);
+        await Task.WhenAll(longRunningToolTasks);
+        foreach (var task in longRunningToolTasks)
+        {
+            var response = await task;
+            Assert.False(response.IsSuccessStatusCode);
+        }
     }
 
     [Fact]
