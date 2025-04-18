@@ -10,24 +10,23 @@ using System.Threading.Channels;
 namespace ModelContextProtocol.Protocol.Transport;
 
 /// <summary>
-/// Handles processing the request/response body pairs for the Streamable HTTP transport. This is typically used via
-/// <see cref="JsonRpcMessage.RelatedTransport"/>.
+/// Handles processing the request/response body pairs for the Streamable HTTP transport.
+/// This is typically used via <see cref="JsonRpcMessage.RelatedTransport"/>.
 /// </summary>
 internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>? incomingChannel, IDuplexPipe httpBodies) : ITransport
 {
     private readonly SseWriter _sseWriter = new();
     private readonly ConcurrentDictionary<RequestId, JsonRpcRequest> _pendingRequests = [];
+    private bool _receivedRequest;
 
-    /// <inheritdoc/>
     // REVIEW: Should we introduce a send-only interface for RelatedTransport?
     public ChannelReader<JsonRpcMessage> MessageReader => throw new NotSupportedException("JsonRpcMessage.RelatedTransport should only be used for sending messages.");
 
-    /// <summary>
-    /// Starts the transport and writes the JSON-RPC messages sent via <see cref="SendMessageAsync"/>
-    /// to the SSE response stream until cancellation is requested or the transport is disposed.
-    /// </summary>
-    /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
-    /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
+    /// <returns>
+    /// True, if data was written to the respond body.
+    /// False, if nothing was written because the request body did not contain any <see cref="JsonRpcRequest"/> messages to respond to.
+    /// The HTTP application should typically respond with an empty "202 Accepted" response in this scenario.
+    /// </returns>
     public async ValueTask<bool> RunAsync(CancellationToken cancellationToken)
     {
         // The incomingChannel is null to handle the potential client GET request to handle unsolicited JsonRpcMessages.
@@ -38,7 +37,7 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
             await OnPostBodyReceivedAsync(httpBodies.Input, cancellationToken).ConfigureAwait(false);
         }
 
-        if (_pendingRequests.IsEmpty)
+        if (!_receivedRequest)
         {
             // No requests were received, so we don't need to write anything to the SSE stream.
             return false;
@@ -48,7 +47,6 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
         return true;
     }
 
-    /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
@@ -63,34 +61,11 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
         }
     }
 
-    /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
         await _sseWriter.DisposeAsync().ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Handles incoming JSON-RPC messages received in POST bodies for the Streamable HTTP transport.
-    /// </summary>
-    /// <param name="streamableHttpRequestBody">The request body containing a JSON-RPC message or batched messages received from the client.</param>
-    /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
-    /// <returns>A task representing the asynchronous operation to buffer the JSON-RPC message for processing.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when there is an attempt to process a message before calling <see cref="RunAsync(CancellationToken)"/>.</exception>
-    /// <remarks>
-    /// <para>
-    /// This method is the entry point for processing client-to-server communication in the SSE transport model.
-    /// While the SSE protocol itself is unidirectional (server to client), this method allows bidirectional
-    /// communication by handling HTTP POST requests.
-    /// </para>
-    /// <para>
-    /// When a client sends a JSON-RPC message in POST bodies, the server calls this method to
-    /// process the message and make it available to the MCP server via the <see cref="MessageReader"/> channel.
-    /// </para>
-    /// <para>
-    /// This method validates that the transport is connected before processing the message, ensuring proper
-    /// sequencing of operations in the transport lifecycle.
-    /// </para>
-    /// </remarks>
     private async ValueTask OnPostBodyReceivedAsync(PipeReader streamableHttpRequestBody, CancellationToken cancellationToken)
     {
         if (!await IsJsonArrayAsync(streamableHttpRequestBody, cancellationToken).ConfigureAwait(false))
@@ -118,6 +93,7 @@ internal sealed class StreamableHttpPostTransport(ChannelWriter<JsonRpcMessage>?
 
         if (message is JsonRpcRequest request)
         {
+            _receivedRequest = true;
             _pendingRequests[request.Id] = request;
         }
 

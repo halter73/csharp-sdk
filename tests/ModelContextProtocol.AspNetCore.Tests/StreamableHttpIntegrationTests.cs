@@ -166,14 +166,14 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         AssertServerInfo(initializeJsonRpcResponse);
 
         var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
-        var echoTask = new Task[100];
+        var echoTasks = new Task[100];
 
-        for (int i = 0; i < echoTask.Length; i++)
+        for (int i = 0; i < echoTasks.Length; i++)
         {
-            echoTask[i] = CallEchoAndValidateAsync(sessionId);
+            echoTasks[i] = CallEchoAndValidateAsync(sessionId);
         }
 
-        await Task.WhenAll(echoTask);
+        await Task.WhenAll(echoTasks);
     }
 
     [McpServerTool(Name = "echo"), Description("Echoes the input back to the client.")]
