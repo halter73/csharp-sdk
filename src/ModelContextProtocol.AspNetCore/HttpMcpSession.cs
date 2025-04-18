@@ -23,14 +23,6 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
         return new UnreferenceDisposable(this);
     }
 
-    public void Unreference()
-    {
-        if (Interlocked.Decrement(ref _referenceCount) == 0)
-        {
-            LastActivityTicks = Environment.TickCount64;
-        }
-    }
-
     public bool HasSameUserId(ClaimsPrincipal user)
         => UserIdClaim == GetUserIdClaim(user);
 

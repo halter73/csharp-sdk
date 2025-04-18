@@ -146,11 +146,11 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         Builder.Services.AddMcpServer().WithHttpTransport();
         await using var app = Builder.Build();
 
-        app.MapMcp("/mcp");
+        app.MapMcp("/custom-route");
 
         await app.StartAsync(TestContext.Current.CancellationToken);
 
-        using var response = await HttpClient.PostAsync("/mcp", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        using var response = await HttpClient.PostAsync("/custom-route", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -159,10 +159,7 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         await StartAsync();
 
-        // This should work with the default HttpCompletionOption.ResponseContentRead setting.
-        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
-        var jsonRpcResponse = await AssertSingleSseResponseAsync(response);
-        AssertServerInfo(jsonRpcResponse);
+        await CallInitializeAndValidateAsync();
     }
 
     [Fact]
@@ -203,12 +200,8 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         await StartAsync();
 
-        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
-        var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
-        AssertServerInfo(initializeJsonRpcResponse);
-
-        var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
-        await CallEchoAndValidateAsync(sessionId);
+        await CallInitializeAndValidateAsync();
+        await CallEchoAndValidateAsync();
     }
 
     [Fact]
@@ -216,32 +209,28 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
     {
         await StartAsync();
 
-        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
-        var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
-        AssertServerInfo(initializeJsonRpcResponse);
+        await CallInitializeAndValidateAsync();
 
-        var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
         var echoTasks = new Task[100];
-
         for (int i = 0; i < echoTasks.Length; i++)
         {
-            echoTasks[i] = CallEchoAndValidateAsync(sessionId);
+            echoTasks[i] = CallEchoAndValidateAsync();
         }
 
         await Task.WhenAll(echoTasks);
     }
 
     [Fact]
-    public async Task DeleteRequest_Complete_OneAtATime()
+    public async Task DeleteRequest_CompletesSession_WhichIsNoLongerFound()
     {
         await StartAsync();
 
-        using var initializeResponse = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
-        var initializeJsonRpcResponse = await AssertSingleSseResponseAsync(initializeResponse);
-        AssertServerInfo(initializeJsonRpcResponse);
+        await CallInitializeAndValidateAsync();
+        await CallEchoAndValidateAsync();
+        await HttpClient.DeleteAsync("", TestContext.Current.CancellationToken);
 
-        var sessionId = Assert.Single(initializeResponse.Headers.GetValues("mcp-session-id"));
-        await CallEchoAndValidateAsync(sessionId);
+        using var response = await HttpClient.PostAsync("", JsonContent(EchoRequest), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [McpServerTool(Name = "echo")]
@@ -260,6 +249,9 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         // more explicit that we're not relying on synchronous execution of the tool.
         await Task.Delay(Timeout.Infinite, cancellation);
     }
+
+    private static StringContent JsonContent(string json) => new StringContent(json, Encoding.UTF8, "application/json");
+    private static JsonTypeInfo<T> GetJsonTypeInfo<T>() => (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));
 
     private static T AssertType<T>(JsonNode? jsonNode)
     {
@@ -285,9 +277,6 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         return callToolResponse;
     }
 
-    private static StringContent JsonContent(string json) => new StringContent(json, Encoding.UTF8, "application/json");
-    private static JsonTypeInfo<T> GetJsonTypeInfo<T>() => (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));
-
     private static async IAsyncEnumerable<SseItem<string>> ReadSseAsync(HttpContent responseContent)
     {
         var responseStream = await responseContent.ReadAsStreamAsync(TestContext.Current.CancellationToken);
@@ -310,19 +299,20 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         return jsonRpcResponse;
     }
 
-    private async Task CallEchoAndValidateAsync(string sessionId)
+    private async Task CallInitializeAndValidateAsync()
     {
-        using var echoRequest = new HttpRequestMessage(HttpMethod.Post, "")
-        {
-            Content = JsonContent(EchoRequest),
-            Headers =
-            {
-                { "mcp-session-id", sessionId },
-            },
-        };
+        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        var rpcResponse = await AssertSingleSseResponseAsync(response);
+        AssertServerInfo(rpcResponse);
 
-        using var echoResponse = await HttpClient.SendAsync(echoRequest, TestContext.Current.CancellationToken);
-        var rpcResponse = await AssertSingleSseResponseAsync(echoResponse);
+        var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
+        HttpClient.DefaultRequestHeaders.Add("mcp-session-id", sessionId);
+    }
+
+    private async Task CallEchoAndValidateAsync()
+    {
+        using var response = await HttpClient.PostAsync("", JsonContent(EchoRequest), TestContext.Current.CancellationToken);
+        var rpcResponse = await AssertSingleSseResponseAsync(response);
         AssertEchoResponse(rpcResponse);
     }
 }
