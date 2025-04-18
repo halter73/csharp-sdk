@@ -26,66 +26,86 @@ internal sealed class StreamableHttpHandler(
 
     public ConcurrentDictionary<string, HttpMcpSession<StreamableHttpServerTransport>> Sessions { get; } = new(StringComparer.Ordinal);
 
-    public async Task HandleRequestAsync(HttpContext context)
+    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetSessionAsync(HttpContext context, string sessionId)
     {
+        if (Sessions.TryGetValue(sessionId, out var existingSession))
+        {
+            return existingSession;
+        }
+
+        // I'd consider making our ErrorCodes type public and reference that, but -32001 isn't part of the MCP standard.
+        // This is what the typescript-sdk currently does. One of the few other usages I found was from some
+        // Ethereum JSON-RPC documentation and this JSON-RPC library from Microsoft called StreamJsonRpc where it's called
+        // JsonRpcErrorCode.NoMarshaledObjectFound
+        // https://learn.microsoft.com/dotnet/api/streamjsonrpc.protocol.jsonrpcerrorcode?view=streamjsonrpc-2.9#fields
+        await WriteJsonRpcErrorAsync(context, -32001, "Session not found", StatusCodes.Status404NotFound);
+        return null;
+    }
+
+    public async Task HandlePostRequestAsync(HttpContext context)
+    {
+        // The Streamable HTTP spec mandates the client MUST accept both application/json and text/event-stream.
+        // ASP.NET Core Minimal APIs mostly ry to stay out of the business of response content negotiation, so
+        // we have to do this manually. The spec doesn't mandate that servers MUST reject these requests, but it's
+        // probably good to at least start out trying to be strict.
+        var acceptHeader = context.Request.Headers.Accept.ToString();
+        if (!acceptHeader.Contains("application/json", StringComparison.Ordinal) ||
+            !acceptHeader.Contains("text/event-stream", StringComparison.Ordinal))
+        {
+            await WriteJsonRpcErrorAsync(context, -32000,
+                "Not Acceptable: Client must accept both application/json and text/event-stream",
+                StatusCodes.Status406NotAcceptable);
+            return;
+        }
+
         var session = await GetOrCreateSessionAsync(context);
         if (session is null)
         {
             return;
         }
 
-        session.Reference();
-
-        try
+        using var _ = session.AcquireReference();
+        InitializeSseResponse(context);
+        var wroteResponse = await session.Transport.HandlePostRequest(new HttpDuplexPipe(context), context.RequestAborted);
+        if (!wroteResponse)
         {
-            await HandleRequestAsync(context, session);
-        }
-        finally
-        {
-            session.Unreference();
+            // We wound up writing nothing, so there should be no Content-Type response header.
+            context.Response.Headers.ContentType = (string?)null;
+            context.Response.StatusCode = StatusCodes.Status202Accepted;
         }
     }
 
-    private async ValueTask HandleRequestAsync(HttpContext context, HttpMcpSession<StreamableHttpServerTransport> session)
+    public async Task HandleGetRequestAsync(HttpContext context)
     {
-        var response = context.Response;
-        response.Headers.ContentType = "text/event-stream";
-        response.Headers.CacheControl = "no-cache,no-store";
-
-        // Make sure we disable all response buffering for SSE.
-        context.Response.Headers.ContentEncoding = "identity";
-        context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
-
-        if (string.Equals(HttpMethods.Get, context.Request.Method, StringComparison.OrdinalIgnoreCase))
+        var acceptHeader = context.Request.Headers.Accept.ToString();
+        if (!acceptHeader.Contains("application/json", StringComparison.Ordinal))
         {
-            await session.Transport.HandleGetRequest(context.Response.Body, context.RequestAborted);
-        }
-        else if (string.Equals(HttpMethods.Post, context.Request.Method, StringComparison.OrdinalIgnoreCase))
-        {
-            var wroteResponse = await session.Transport.HandlePostRequest(new HttpDuplexPipe(context), context.RequestAborted);
-            if (!wroteResponse)
-            {
-                // We wound up writing nothing, so there should be no Content-Type response header.
-                response.Headers.ContentType = (string?)null;
-                response.StatusCode = StatusCodes.Status202Accepted;
-            }
-        }
-        else if (string.Equals(HttpMethods.Delete, context.Request.Method, StringComparison.OrdinalIgnoreCase))
-        {
-            if (Sessions.TryRemove(session.Id, out var _))
-            {
-                await session.Transport.DisposeAsync();
-            }
+            await WriteJsonRpcErrorAsync(context, -32000,
+                "Not Acceptable: Client must accept text/event-stream",
+                StatusCodes.Status406NotAcceptable);
             return;
         }
-        else
+
+        var sessionId = context.Request.Headers["mcp-session-id"].ToString();
+        var session = await GetSessionAsync(context, sessionId);
+        if (session is null)
         {
-            throw new UnreachableException($"Unexpected HTTP method: {context.Request.Method}.");
+            return;
         }
+
+        using var _ = session.AcquireReference();
+        InitializeSseResponse(context);
+        await session.Transport.HandleGetRequest(context.Response.Body, context.RequestAborted);
     }
 
-    internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)
-        => session.RunAsync(requestAborted);
+    public async Task HandleDeleteRequestAsync(HttpContext context)
+    {
+        var sessionId = context.Request.Headers["mcp-session-id"].ToString();
+        if (Sessions.TryRemove(sessionId, out var session))
+        {
+            await session.Transport.DisposeAsync();
+        }
+    }
 
     private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetOrCreateSessionAsync(HttpContext context)
     {
@@ -134,22 +154,6 @@ internal sealed class StreamableHttpHandler(
         };
     }
 
-    private async ValueTask<HttpMcpSession<StreamableHttpServerTransport>?> GetSessionAsync(HttpContext context, string sessionId)
-    {
-        if (Sessions.TryGetValue(sessionId, out var existingSession))
-        {
-            return existingSession;
-        }
-
-        // I'd consider making our ErrorCodes type public and reference that, but -32001 isn't part of the MCP standard.
-        // This is what the typescript-sdk currently does. One of the few other usages I found was from some
-        // Ethereum JSON-RPC documentation and this JSON-RPC library from Microsoft called StreamJsonRpc where it's called
-        // JsonRpcErrorCode.NoMarshaledObjectFound
-        // https://learn.microsoft.com/dotnet/api/streamjsonrpc.protocol.jsonrpcerrorcode?view=streamjsonrpc-2.9#fields
-        await WriteJsonRpcErrorAsync(context, -32001, "Session not found", StatusCodes.Status404NotFound);
-        return null;
-    }
-
     private static Task WriteJsonRpcErrorAsync(HttpContext context, int errorCode, string errorMessage, int statusCode)
     {
         var jsonRpcError = new JsonRpcError
@@ -163,12 +167,25 @@ internal sealed class StreamableHttpHandler(
         return Results.Json(jsonRpcError, s_errorTypeInfo, statusCode: statusCode).ExecuteAsync(context);
     }
 
+    internal static void InitializeSseResponse(HttpContext context)
+    {
+        context.Response.Headers.ContentType = "text/event-stream";
+        context.Response.Headers.CacheControl = "no-cache,no-store";
+
+        // Make sure we disable all response buffering for SSE.
+        context.Response.Headers.ContentEncoding = "identity";
+        context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
+    }
+
     internal static string MakeNewSessionId()
     {
         Span<byte> buffer = stackalloc byte[16];
         RandomNumberGenerator.Fill(buffer);
         return WebEncoders.Base64UrlEncode(buffer);
     }
+
+    internal static Task RunSessionAsync(HttpContext httpContext, IMcpServer session, CancellationToken requestAborted)
+        => session.RunAsync(requestAborted);
 
     private static JsonTypeInfo<T> GetRequiredJsonTypeInfo<T>() => (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));
 

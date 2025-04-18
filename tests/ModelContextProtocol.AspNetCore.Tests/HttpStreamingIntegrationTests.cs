@@ -60,6 +60,19 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
     }
 
     [Fact]
+    public async Task PostRequest_IsRejected_WithoutTextEventStreamAcceptHeader()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport();
+        await using var app = Builder.Build();
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        HttpClient.DefaultRequestHeaders.Accept.Clear();
+        using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task InitializeRequest_Matches_CustomRoute()
     {
         Builder.Services.AddMcpServer().WithHttpTransport();

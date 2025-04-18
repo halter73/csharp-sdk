@@ -30,15 +30,9 @@ internal sealed class SseHandler(
         using var sseCts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, hostApplicationLifetime.ApplicationStopping);
         var cancellationToken = sseCts.Token;
 
-        var response = context.Response;
-        response.Headers.ContentType = "text/event-stream";
-        response.Headers.CacheControl = "no-cache,no-store";
+        StreamableHttpHandler.InitializeSseResponse(context);
 
-        // Make sure we disable all response buffering for SSE
-        context.Response.Headers.ContentEncoding = "identity";
-        context.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
-
-        await using var transport = new SseResponseStreamTransport(response.Body, $"message?sessionId={sessionId}");
+        await using var transport = new SseResponseStreamTransport(context.Response.Body, $"message?sessionId={sessionId}");
         var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(sessionId, transport, context.User);
         if (!_sessions.TryAdd(sessionId, httpMcpSession))
         {

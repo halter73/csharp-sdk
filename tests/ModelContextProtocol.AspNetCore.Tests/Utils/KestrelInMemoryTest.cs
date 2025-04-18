@@ -30,6 +30,10 @@ public class KestrelInMemoryTest : LoggedTest
         })
         {
             BaseAddress = new Uri("http://localhost:5000/"),
+            DefaultRequestHeaders =
+            {
+                { "Accept", "application/json, text/event-stream" },
+            },
         };
     }
 

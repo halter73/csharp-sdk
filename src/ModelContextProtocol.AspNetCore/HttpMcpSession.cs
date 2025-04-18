@@ -17,9 +17,10 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
     public IMcpServer? Server { get; init; }
     public Task? ServerRunTask { get; init; }
 
-    public void Reference()
+    public IDisposable AcquireReference()
     {
         Interlocked.Increment(ref _referenceCount);
+        return new UnreferenceDisposable(this);
     }
 
     public void Unreference()
@@ -51,5 +52,16 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
         }
 
         return null;
+    }
+
+    private sealed class UnreferenceDisposable(HttpMcpSession<TTransport> session) : IDisposable
+    {
+        public void Dispose()
+        {
+            if (Interlocked.Decrement(ref session._referenceCount) == 0)
+            {
+                session.LastActivityTicks = Environment.TickCount64;
+            }
+        }
     }
 }
