@@ -170,16 +170,7 @@ internal sealed class StreamableHttpHandler(
         return WebEncoders.Base64UrlEncode(buffer);
     }
 
-    private static JsonTypeInfo<T> GetRequiredJsonTypeInfo<T>()
-    {
-        var options = McpJsonUtilities.DefaultOptions;
-        var typeInfo = options.GetTypeInfo(typeof(T));
-        if (typeInfo is null)
-        {
-            throw new UnreachableException($"Unable to resolve JsonTypeInfo<{typeof(T)}> from McpJsonUtilities.DefaultOptions.");
-        }
-        return (JsonTypeInfo<T>)typeInfo;
-    }
+    private static JsonTypeInfo<T> GetRequiredJsonTypeInfo<T>() => (JsonTypeInfo<T>)McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(T));
 
     private class HttpDuplexPipe(HttpContext context) : IDuplexPipe
     {

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.AspNetCore;
+using ModelContextProtocol.Protocol.Messages;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Microsoft.AspNetCore.Builder;
@@ -26,7 +27,10 @@ public static class McpEndpointRouteBuilderExtensions
             throw new InvalidOperationException("You must call WithHttpTransport(). Unable to find required services. Call builder.Services.AddMcpServer().WithHttpTransport() in application startup code.");
 
         var mcpGroup = endpoints.MapGroup(pattern);
-        var streamableHttpGroup = mcpGroup.MapGroup("");
+        var streamableHttpGroup = mcpGroup.MapGroup("")
+            .WithDisplayName(b => $"MCP Streamable HTTP | {b.DisplayName}")
+            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status404NotFound, typeof(JsonRpcError), contentTypes: ["application/json"]));
+
         streamableHttpGroup.MapPost("", streamableHttpHandler.HandleRequestAsync)
             .WithMetadata(new AcceptsMetadata(["application/json"]))
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, contentTypes: ["text/event-stream"]))
@@ -34,17 +38,17 @@ public static class McpEndpointRouteBuilderExtensions
         streamableHttpGroup.MapGet("", streamableHttpHandler.HandleRequestAsync)
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, contentTypes: ["text/event-stream"]));
         streamableHttpGroup.MapDelete("", streamableHttpHandler.HandleRequestAsync);
-        streamableHttpGroup.WithDisplayName(b => $"MCP Streamable HTTP | {b.DisplayName}");
 
         // Map legacy HTTP with SSE endpoints.
         var sseHandler = endpoints.ServiceProvider.GetRequiredService<SseHandler>();
-        var sseGroup = mcpGroup.MapGroup("");
+        var sseGroup = mcpGroup.MapGroup("")
+            .WithDisplayName(b => $"MCP HTTP with SSE | {b.DisplayName}");
+
         sseGroup.MapGet("/sse", sseHandler.HandleSseRequestAsync)
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, contentTypes: ["text/event-stream"]));
         sseGroup.MapPost("/message", sseHandler.HandleMessageRequestAsync)
             .WithMetadata(new AcceptsMetadata(["application/json"]))
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status202Accepted));
-        sseGroup.WithDisplayName(b => $"MCP HTTP with SSE | {b.DisplayName}");
 
         return mcpGroup;
     }

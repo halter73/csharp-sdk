@@ -43,7 +43,8 @@ public class HttpStreamingIntegrationTests(ITestOutputHelper outputHelper) : Kes
 
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var sessionId = Assert.Single(response.Headers.GetValues("mcp-session-id"));
+        Assert.Single(response.Headers.GetValues("mcp-session-id"));
+        Assert.Equal("text/event-stream", Assert.Single(response.Content.Headers.GetValues("content-type")));
     }
 
     [Fact]
