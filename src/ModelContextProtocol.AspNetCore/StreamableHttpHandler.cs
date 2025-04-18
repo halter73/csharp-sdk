@@ -19,7 +19,8 @@ internal sealed class StreamableHttpHandler(
     IOptions<McpServerOptions> mcpServerOptionsSnapshot,
     IOptionsFactory<McpServerOptions> mcpServerOptionsFactory,
     IOptions<HttpServerTransportOptions> httpMcpServerOptions,
-    ILoggerFactory loggerFactory)
+    ILoggerFactory loggerFactory,
+    IServiceProvider applicationServices)
 {
     private static JsonTypeInfo<JsonRpcError> s_errorTypeInfo = GetRequiredJsonTypeInfo<JsonRpcError>();
 
@@ -124,7 +125,8 @@ internal sealed class StreamableHttpHandler(
         }
 
         var transport = new StreamableHttpServerTransport();
-        var server = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
+        // Use applicationServices instead of RequestServices since the session will likely outlive the first initialization request.
+        var server = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, applicationServices);
         return new HttpMcpSession<StreamableHttpServerTransport>(MakeNewSessionId(), transport, context.User)
         {
             Server = server,
