@@ -16,6 +16,12 @@ namespace ModelContextProtocol.AspNetCore.Tests;
 
 public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
 {
+    private static McpServerTool[] Tools { get; } = [
+        McpServerTool.Create(EchoAsync),
+        McpServerTool.Create(LongRunningAsync),
+        McpServerTool.Create(Progress),
+    ];
+
     private WebApplication? _app;
 
     private async Task StartAsync()
@@ -26,13 +32,10 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         {
             options.ServerInfo = new Implementation
             {
-                Name = "TestServer",
+                Name = nameof(StreamableHttpIntegrationTests),
                 Version = "73",
             };
-        }).WithHttpTransport();
-
-        Builder.Services.AddSingleton(McpServerTool.Create(EchoAsync));
-        Builder.Services.AddSingleton(McpServerTool.Create(LongRunningAsync));
+        }).WithTools(Tools).WithHttpTransport();
 
         _app = Builder.Build();
 
@@ -228,21 +231,38 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    [McpServerTool(Name = "echo")]
-    private static async Task<string> EchoAsync(string message)
+    [Fact]
+    public async Task Progress_IsReported_InSameSseResponseAsRpcResponse()
     {
-        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
-        // more explicit that we're not relying on synchronous execution of the tool.
-        await Task.Yield();
-        return message;
-    }
+        await StartAsync();
 
-    [McpServerTool(Name = "long-running")]
-    private static async Task LongRunningAsync(CancellationToken cancellation)
-    {
-        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
-        // more explicit that we're not relying on synchronous execution of the tool.
-        await Task.Delay(Timeout.Infinite, cancellation);
+        await CallInitializeAndValidateAsync();
+
+        using var response = await HttpClient.PostAsync("", JsonContent(CallToolWithProgressToken("progress")), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var currentSseItem = 0;
+        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content))
+        {
+            currentSseItem++;
+
+            if (currentSseItem <= 10)
+            {
+                var notification = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcNotification>());
+                var progressNotification = AssertType<ProgressNotification>(notification?.Params);
+                Assert.Equal($"Progress {currentSseItem - 1}", progressNotification.Progress.Message);
+            }
+            else
+            {
+                var rpcResponse = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcResponse>());
+                var callToolResponse = AssertType<CallToolResponse>(rpcResponse?.Result);
+                var callToolContent = Assert.Single(callToolResponse.Content);
+                Assert.Equal("text", callToolContent.Type);
+                Assert.Equal("done", callToolContent.Text);
+            }
+        }
+
+        Assert.Equal(11, currentSseItem);
     }
 
     private void AddDefaultHttpClietRequestHeaders()
@@ -259,23 +279,6 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         var type = JsonSerializer.Deserialize<T>(jsonNode, GetJsonTypeInfo<T>());
         Assert.NotNull(type);
         return type;
-    }
-
-    private static InitializeResult AssertServerInfo(JsonRpcResponse rpcResponse)
-    {
-        var initializeResult = AssertType<InitializeResult>(rpcResponse.Result);
-        Assert.Equal("TestServer", initializeResult.ServerInfo.Name);
-        Assert.Equal("73", initializeResult.ServerInfo.Version);
-        return initializeResult;
-    }
-
-    private static CallToolResponse AssertEchoResponse(JsonRpcResponse rpcResponse)
-    {
-        var callToolResponse = AssertType<CallToolResponse>(rpcResponse.Result);
-        var callToolContent = Assert.Single(callToolResponse.Content);
-        Assert.Equal("text", callToolContent.Type);
-        Assert.Equal($"Hello world! ({rpcResponse.Id})", callToolContent.Text);
-        return callToolResponse;
     }
 
     private static async IAsyncEnumerable<SseItem<string>> ReadSseAsync(HttpContent responseContent)
@@ -323,6 +326,36 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
             """;
     }
 
+    private string Request(string method, string parameters = "{}")
+    {
+        var id = Interlocked.Increment(ref _lastRequestId);
+        return $$"""
+            {"jsonrpc":"2.0","id":{{id}},"method":"{{method}}","params":{{parameters}}}
+            """;
+    }
+
+    private string CallToolWithProgressToken(string toolName, string arguments = "{}") =>
+        Request("tools/call", $$$"""
+            {"name":"{{{toolName}}}","arguments":{{{arguments}}}, "_meta":{"progressToken": "abc123"}}
+            """);
+
+    private static InitializeResult AssertServerInfo(JsonRpcResponse rpcResponse)
+    {
+        var initializeResult = AssertType<InitializeResult>(rpcResponse.Result);
+        Assert.Equal(nameof(StreamableHttpIntegrationTests), initializeResult.ServerInfo.Name);
+        Assert.Equal("73", initializeResult.ServerInfo.Version);
+        return initializeResult;
+    }
+
+    private static CallToolResponse AssertEchoResponse(JsonRpcResponse rpcResponse)
+    {
+        var callToolResponse = AssertType<CallToolResponse>(rpcResponse.Result);
+        var callToolContent = Assert.Single(callToolResponse.Content);
+        Assert.Equal("text", callToolContent.Type);
+        Assert.Equal($"Hello world! ({rpcResponse.Id})", callToolContent.Text);
+        return callToolResponse;
+    }
+
     private async Task CallInitializeAndValidateAsync()
     {
         using var response = await HttpClient.PostAsync("", JsonContent(InitializeRequest), TestContext.Current.CancellationToken);
@@ -338,5 +371,33 @@ public class StreamableHttpIntegrationTests(ITestOutputHelper outputHelper) : Ke
         using var response = await HttpClient.PostAsync("", JsonContent(EchoRequest), TestContext.Current.CancellationToken);
         var rpcResponse = await AssertSingleSseResponseAsync(response);
         AssertEchoResponse(rpcResponse);
+    }
+
+    [McpServerTool(Name = "echo")]
+    private static async Task<string> EchoAsync(string message)
+    {
+        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
+        // more explicit that we're not relying on synchronous execution of the tool.
+        await Task.Yield();
+        return message;
+    }
+
+    [McpServerTool(Name = "long-running")]
+    private static async Task LongRunningAsync(CancellationToken cancellation)
+    {
+        // McpSession.ProcessMessagesAsync() already yields before calling any handlers, but this makes it even
+        // more explicit that we're not relying on synchronous execution of the tool.
+        await Task.Delay(Timeout.Infinite, cancellation);
+    }
+
+    [McpServerTool(Name = "progress")]
+    public static string Progress(IProgress<ProgressNotificationValue> progress)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            progress.Report(new() { Progress = i, Total = 10, Message = $"Progress {i}" });
+        }
+
+        return "done";
     }
 }
