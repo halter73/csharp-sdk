@@ -93,6 +93,14 @@ internal sealed class StreamableHttpHandler(
             return;
         }
 
+        if (!session.TryStartGet())
+        {
+            await WriteJsonRpcErrorAsync(context, -32000,
+                "Bad Request: This server does not support multiple GET requests. Start a new session to get a new GET SSE response.",
+                StatusCodes.Status400BadRequest);
+            return;
+        }
+
         using var _ = session.AcquireReference();
         InitializeSseResponse(context);
 

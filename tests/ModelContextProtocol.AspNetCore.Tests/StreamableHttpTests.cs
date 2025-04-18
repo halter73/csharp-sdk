@@ -169,9 +169,9 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var eventCount = 0;
-        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content))
+        await foreach (var sseEvent in ReadSseAsync(response.Content))
         {
-            var jsonRpcResponse = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcResponse>());
+            var jsonRpcResponse = JsonSerializer.Deserialize(sseEvent, GetJsonTypeInfo<JsonRpcResponse>());
             Assert.NotNull(jsonRpcResponse);
             var responseId = Assert.IsType<long>(jsonRpcResponse.Id.Id);
 
@@ -218,7 +218,6 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         await Task.WhenAll(echoTasks);
     }
 
-
     [Fact]
     public async Task GetRequest_Receives_UnsolicitedNotifications()
     {
@@ -243,9 +242,9 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         using var getResponse = await HttpClient.GetAsync("", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         async Task<string> GetFirstNotificationAsync()
         {
-            await foreach (SseItem<string> sseEvent in ReadSseAsync(getResponse.Content))
+            await foreach (var sseEvent in ReadSseAsync(getResponse.Content))
             {
-                var notification = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcNotification>());
+                var notification = JsonSerializer.Deserialize(sseEvent, GetJsonTypeInfo<JsonRpcNotification>());
                 Assert.NotNull(notification);
                 return notification.Method;
             }
@@ -255,6 +254,19 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
 
         await server.SendNotificationAsync("test-method", TestContext.Current.CancellationToken);
         Assert.Equal("test-method", await GetFirstNotificationAsync());
+    }
+
+    [Fact]
+    public async Task SecondGetRequests_IsRejected_AsBadRequest()
+    {
+        await StartAsync();
+
+        await CallInitializeAndValidateAsync();
+        using var getResponse1 = await HttpClient.GetAsync("", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        using var getResponse2 = await HttpClient.GetAsync("", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, getResponse1.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, getResponse2.StatusCode);
     }
 
     [Fact]
@@ -310,19 +322,19 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var currentSseItem = 0;
-        await foreach (SseItem<string> sseEvent in ReadSseAsync(response.Content))
+        await foreach (var sseEvent in ReadSseAsync(response.Content))
         {
             currentSseItem++;
 
             if (currentSseItem <= 10)
             {
-                var notification = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcNotification>());
+                var notification = JsonSerializer.Deserialize(sseEvent, GetJsonTypeInfo<JsonRpcNotification>());
                 var progressNotification = AssertType<ProgressNotification>(notification?.Params);
                 Assert.Equal($"Progress {currentSseItem - 1}", progressNotification.Progress.Message);
             }
             else
             {
-                var rpcResponse = JsonSerializer.Deserialize(sseEvent.Data, GetJsonTypeInfo<JsonRpcResponse>());
+                var rpcResponse = JsonSerializer.Deserialize(sseEvent, GetJsonTypeInfo<JsonRpcResponse>());
                 var callToolResponse = AssertType<CallToolResponse>(rpcResponse?.Result);
                 var callToolContent = Assert.Single(callToolResponse.Content);
                 Assert.Equal("text", callToolContent.Type);
@@ -349,13 +361,13 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         return type;
     }
 
-    private static async IAsyncEnumerable<SseItem<string>> ReadSseAsync(HttpContent responseContent)
+    private static async IAsyncEnumerable<string> ReadSseAsync(HttpContent responseContent)
     {
         var responseStream = await responseContent.ReadAsStreamAsync(TestContext.Current.CancellationToken);
         await foreach (var sseItem in SseParser.Create(responseStream).EnumerateAsync(TestContext.Current.CancellationToken))
         {
             Assert.Equal("message", sseItem.EventType);
-            yield return sseItem;
+            yield return sseItem.Data;
         }
     }
 
@@ -365,7 +377,7 @@ public class StreamableHttpTests(ITestOutputHelper outputHelper) : KestrelInMemo
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
 
         var sseItem = Assert.Single(await ReadSseAsync(response.Content).ToListAsync(TestContext.Current.CancellationToken));
-        var jsonRpcResponse = JsonSerializer.Deserialize(sseItem.Data, GetJsonTypeInfo<JsonRpcResponse>());
+        var jsonRpcResponse = JsonSerializer.Deserialize(sseItem, GetJsonTypeInfo<JsonRpcResponse>());
 
         Assert.NotNull(jsonRpcResponse);
         return jsonRpcResponse;

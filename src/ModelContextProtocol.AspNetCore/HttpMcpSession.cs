@@ -5,6 +5,7 @@ namespace ModelContextProtocol.AspNetCore;
 
 internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport transport, ClaimsPrincipal user)
 {
+    private int _getStarted;
     private int _referenceCount;
 
     public string Id { get; } = sessionId;
@@ -13,6 +14,8 @@ internal sealed class HttpMcpSession<TTransport>(string sessionId, TTransport tr
 
     public bool IsActive => _referenceCount > 0;
     public long LastActivityTicks { get; private set; } = Environment.TickCount64;
+
+    public bool TryStartGet() => Interlocked.Exchange(ref _getStarted, 1) == 0;
 
     public IMcpServer? Server { get; init; }
     public Task? ServerRunTask { get; init; }
