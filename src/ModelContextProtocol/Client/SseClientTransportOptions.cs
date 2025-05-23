@@ -33,16 +33,16 @@ public record SseClientTransportOptions
 
 
     /// <summary>
-    /// Gets or sets the transport mode to use for the connection. Defaults to <see cref="SseTransportMode.AutoDetect"/>.
+    /// Gets or sets the transport mode to use for the connection. Defaults to <see cref="HttpTransportMode.AutoDetect"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When set to <see cref="SseTransportMode.AutoDetect"/> (the default), the client will first attempt to use
+    /// When set to <see cref="HttpTransportMode.AutoDetect"/> (the default), the client will first attempt to use
     /// Streamable HTTP transport and automatically fall back to SSE transport if the server doesn't support it.
     /// This provides the best compatibility and matches the behavior of VS Code.
     /// </para>
     /// </remarks>
-    public SseTransportMode TransportMode { get; init; } = SseTransportMode.AutoDetect;
+    public HttpTransportMode TransportMode { get; init; } = HttpTransportMode.AutoDetect;
 
     /// <summary>
     /// Gets a transport identifier used for logging purposes.
@@ -69,13 +69,4 @@ public record SseClientTransportOptions
     /// Use this property to specify custom HTTP headers that should be sent with each request to the server.
     /// </remarks>
     public Dictionary<string, string>? AdditionalHeaders { get; init; }
-
-    /// <summary>
-    /// Gets the effective transport mode based on the current configuration.
-    /// </summary>
-    /// <returns>The transport mode to use for the connection.</returns>
-    internal SseTransportMode GetEffectiveTransportMode()
-    {
-        return TransportMode;
-    }
 }

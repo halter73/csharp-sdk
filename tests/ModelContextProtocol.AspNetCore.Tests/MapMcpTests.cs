@@ -35,10 +35,10 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         var sseClientTransportOptions = new SseClientTransportOptions()
         {
             Endpoint = new Uri($"http://localhost{path}"),
-            TransportMode = UseStreamableHttp ? SseTransportMode.StreamableHttp : SseTransportMode.Sse,
+            TransportMode = UseStreamableHttp ? HttpTransportMode.StreamableHttp : HttpTransportMode.Sse,
         };
-        await using var defaultTransport = new SseClientTransport(sseClientTransportOptions, HttpClient, LoggerFactory);
-        return await McpClientFactory.CreateAsync(defaultTransport, loggerFactory: LoggerFactory, cancellationToken: TestContext.Current.CancellationToken);
+        await using var transport = new SseClientTransport(sseClientTransportOptions, HttpClient, LoggerFactory);
+        return await McpClientFactory.CreateAsync(transport, loggerFactory: LoggerFactory, cancellationToken: TestContext.Current.CancellationToken);
     }
 
     [Fact]

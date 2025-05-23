@@ -18,7 +18,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.AutoDetect,
+            TransportMode = HttpTransportMode.AutoDetect,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -53,7 +53,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         // The auto-detecting transport should be returned
         Assert.NotNull(session);
         Assert.True(session.IsConnected);
-        Assert.IsType<AutoDetectingClientTransport>(session);
+        Assert.IsType<AutoDetectingClientSessionTransport>(session);
     }
 
     [Fact] 
@@ -62,7 +62,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.AutoDetect,
+            TransportMode = HttpTransportMode.AutoDetect,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -116,7 +116,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         // The auto-detecting transport should be returned
         Assert.NotNull(session);
         Assert.True(session.IsConnected);
-        Assert.IsType<AutoDetectingClientTransport>(session);
+        Assert.IsType<AutoDetectingClientSessionTransport>(session);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.AutoDetect,
+            TransportMode = HttpTransportMode.AutoDetect,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -147,8 +147,8 @@ public class SseClientTransportAutoDetectTests : LoggedTest
 
         await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
         
-        // Should return AutoDetectingClientTransport when using AutoDetect mode
-        Assert.IsType<AutoDetectingClientTransport>(session);
+        // Should return AutoDetectingClientSessionTransport when using AutoDetect mode
+        Assert.IsType<AutoDetectingClientSessionTransport>(session);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.StreamableHttp,
+            TransportMode = HttpTransportMode.StreamableHttp,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -178,7 +178,7 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.Sse,
+            TransportMode = HttpTransportMode.Sse,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -204,38 +204,5 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         Assert.IsType<SseClientSessionTransport>(session);
     }
 
-    [Fact]
-    public void GetEffectiveTransportMode_Should_Return_Configured_TransportMode()
-    {
-        var options1 = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.StreamableHttp
-        };
-        Assert.Equal(SseTransportMode.StreamableHttp, options1.GetEffectiveTransportMode());
 
-        var options2 = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.Sse
-        };
-        Assert.Equal(SseTransportMode.Sse, options2.GetEffectiveTransportMode());
-
-        var options3 = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.AutoDetect
-        };
-        Assert.Equal(SseTransportMode.AutoDetect, options3.GetEffectiveTransportMode());
-    }
-
-    [Fact]
-    public void GetEffectiveTransportMode_Should_Default_To_AutoDetect()
-    {
-        var options = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080")
-        };
-        Assert.Equal(SseTransportMode.AutoDetect, options.GetEffectiveTransportMode());
-    }
 }

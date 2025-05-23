@@ -15,7 +15,7 @@ public class StreamableHttpServerIntegrationTests(SseServerIntegrationTestFixtur
     {
         Endpoint = new Uri("http://localhost/"),
         Name = "In-memory Streamable HTTP Client",
-        TransportMode = SseTransportMode.StreamableHttp,
+        TransportMode = HttpTransportMode.StreamableHttp,
     };
 
     [Fact]

@@ -56,7 +56,7 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/"),
-            TransportMode = SseTransportMode.StreamableHttp
+            TransportMode = HttpTransportMode.StreamableHttp
         };
 
         var mcpClient = await ConnectAsync("/", options);
@@ -84,7 +84,7 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/"),
-            TransportMode = SseTransportMode.AutoDetect
+            TransportMode = HttpTransportMode.AutoDetect
         };
 
         var mcpClient = await ConnectAsync("/", options);
@@ -112,7 +112,7 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/sse"),
-            TransportMode = SseTransportMode.AutoDetect
+            TransportMode = HttpTransportMode.AutoDetect
         };
 
         var mcpClient = await ConnectAsync("/sse", options);
@@ -140,7 +140,7 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/sse"),
-            TransportMode = SseTransportMode.Sse
+            TransportMode = HttpTransportMode.Sse
         };
 
         var mcpClient = await ConnectAsync("/sse", options);

@@ -1,9 +1,9 @@
 namespace ModelContextProtocol.Client;
 
 /// <summary>
-/// Specifies the transport mode for SSE client connections.
+/// Specifies the transport mode for HTTP client connections.
 /// </summary>
-public enum SseTransportMode
+public enum HttpTransportMode
 {
     /// <summary>
     /// Automatically detect the appropriate transport by trying Streamable HTTP first, then falling back to SSE if that fails.

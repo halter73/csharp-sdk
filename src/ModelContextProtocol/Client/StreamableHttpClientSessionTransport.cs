@@ -203,16 +203,40 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         return null;
     }
 
-    private void LogJsonException(JsonException ex, string data)
+    /// <summary>
+    /// Sends the initial initialization request and returns the HTTP response so the status code can be checked.
+    /// </summary>
+    /// <param name="message">The initialize message to send, which must be a JsonRpcRequest with the method "initialize".</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The HTTP response message for the initialization request.</returns>
+    internal async Task<HttpResponseMessage> SendInitialRequestAsync(
+        JsonRpcMessage message,
+        CancellationToken cancellationToken = default)
     {
-        if (_logger.IsEnabled(LogLevel.Trace))
+        using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _connectionCts.Token);
+        cancellationToken = sendCts.Token;
+
+#if NET
+        using var content = JsonContent.Create(message, McpJsonUtilities.JsonContext.Default.JsonRpcMessage);
+#else
+        using var content = new StringContent(
+            JsonSerializer.Serialize(message, McpJsonUtilities.JsonContext.Default.JsonRpcMessage),
+            Encoding.UTF8,
+            "application/json; charset=utf-8"
+        );
+#endif
+
+        using var httpRequestMessage = new HttpRequestMessage(HttpMethod.Post, _options.Endpoint)
         {
-            LogTransportMessageParseFailedSensitive(Name, data, ex);
-        }
-        else
-        {
-            LogTransportMessageParseFailed(Name, ex);
-        }
+            Content = content,
+            Headers =
+            {
+                Accept = { s_applicationJsonMediaType, s_textEventStreamMediaType },
+            },
+        };
+
+        CopyAdditionalHeaders(httpRequestMessage.Headers, _options.AdditionalHeaders, _mcpSessionId);
+        return await _httpClient.SendAsync(httpRequestMessage, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
     }
 
     internal static void CopyAdditionalHeaders(HttpRequestHeaders headers, Dictionary<string, string>? additionalHeaders, string? sessionId = null)
