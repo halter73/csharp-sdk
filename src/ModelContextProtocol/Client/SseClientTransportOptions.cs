@@ -30,18 +30,7 @@ public record SseClientTransportOptions
         }
     }
 
-    /// <summary>
-    /// Gets or sets a value indicating whether to use "Streamable HTTP" for the transport rather than "HTTP with SSE". Defaults to false.
-    /// <see href="https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http">Streamable HTTP transport specification</see>.
-    /// <see href="https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse">HTTP with SSE transport specification</see>.
-    /// </summary>
-    /// <remarks>
-    /// This property is maintained for backward compatibility. Consider using <see cref="TransportMode"/> instead.
-    /// When <see cref="TransportMode"/> is not explicitly set, this property determines the transport mode:
-    /// <see langword="true"/> maps to <see cref="SseTransportMode.StreamableHttp"/>, 
-    /// <see langword="false"/> maps to <see cref="SseTransportMode.AutoDetect"/>.
-    /// </remarks>
-    public bool UseStreamableHttp { get; init; }
+
 
     /// <summary>
     /// Gets or sets the transport mode to use for the connection. Defaults to <see cref="SseTransportMode.AutoDetect"/>.
@@ -52,11 +41,8 @@ public record SseClientTransportOptions
     /// Streamable HTTP transport and automatically fall back to SSE transport if the server doesn't support it.
     /// This provides the best compatibility and matches the behavior of VS Code.
     /// </para>
-    /// <para>
-    /// When this property is explicitly set, it takes precedence over <see cref="UseStreamableHttp"/>.
-    /// </para>
     /// </remarks>
-    public SseTransportMode? TransportMode { get; init; }
+    public SseTransportMode TransportMode { get; init; } = SseTransportMode.AutoDetect;
 
     /// <summary>
     /// Gets a transport identifier used for logging purposes.
@@ -90,13 +76,6 @@ public record SseClientTransportOptions
     /// <returns>The transport mode to use for the connection.</returns>
     internal SseTransportMode GetEffectiveTransportMode()
     {
-        // If TransportMode is explicitly set, use it
-        if (TransportMode.HasValue)
-        {
-            return TransportMode.Value;
-        }
-
-        // Fall back to UseStreamableHttp for backward compatibility
-        return UseStreamableHttp ? SseTransportMode.StreamableHttp : SseTransportMode.AutoDetect;
+        return TransportMode;
     }
 }

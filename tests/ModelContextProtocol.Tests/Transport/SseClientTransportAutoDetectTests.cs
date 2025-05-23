@@ -120,12 +120,12 @@ public class SseClientTransportAutoDetectTests : LoggedTest
     }
 
     [Fact]
-    public async Task UseStreamableHttp_False_Should_Default_To_AutoDetect()
+    public async Task TransportMode_AutoDetect_Should_Use_AutoDetectingTransport()
     {
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            UseStreamableHttp = false, // This should map to AutoDetect
+            TransportMode = SseTransportMode.AutoDetect,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -147,17 +147,17 @@ public class SseClientTransportAutoDetectTests : LoggedTest
 
         await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
         
-        // Should return AutoDetectingClientTransport when UseStreamableHttp is false
+        // Should return AutoDetectingClientTransport when using AutoDetect mode
         Assert.IsType<AutoDetectingClientTransport>(session);
     }
 
     [Fact]
-    public async Task UseStreamableHttp_True_Should_Return_StreamableHttp_Transport()
+    public async Task TransportMode_StreamableHttp_Should_Return_StreamableHttp_Transport()
     {
         var options = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            UseStreamableHttp = true, // This should map to StreamableHttp mode
+            TransportMode = SseTransportMode.StreamableHttp,
             ConnectionTimeout = TimeSpan.FromSeconds(2),
             Name = "Test Server"
         };
@@ -226,34 +226,37 @@ public class SseClientTransportAutoDetectTests : LoggedTest
     }
 
     [Fact]
-    public void GetEffectiveTransportMode_Should_Respect_TransportMode_Over_UseStreamableHttp()
-    {
-        var options = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080"),
-            UseStreamableHttp = true,
-            TransportMode = SseTransportMode.Sse // This should override UseStreamableHttp
-        };
-
-        var effectiveMode = options.GetEffectiveTransportMode();
-        Assert.Equal(SseTransportMode.Sse, effectiveMode);
-    }
-
-    [Fact]
-    public void GetEffectiveTransportMode_Should_Use_UseStreamableHttp_When_TransportMode_Not_Set()
+    public void GetEffectiveTransportMode_Should_Return_Configured_TransportMode()
     {
         var options1 = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            UseStreamableHttp = true
+            TransportMode = SseTransportMode.StreamableHttp
         };
         Assert.Equal(SseTransportMode.StreamableHttp, options1.GetEffectiveTransportMode());
 
         var options2 = new SseClientTransportOptions
         {
             Endpoint = new Uri("http://localhost:8080"),
-            UseStreamableHttp = false
+            TransportMode = SseTransportMode.Sse
         };
-        Assert.Equal(SseTransportMode.AutoDetect, options2.GetEffectiveTransportMode());
+        Assert.Equal(SseTransportMode.Sse, options2.GetEffectiveTransportMode());
+
+        var options3 = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            TransportMode = SseTransportMode.AutoDetect
+        };
+        Assert.Equal(SseTransportMode.AutoDetect, options3.GetEffectiveTransportMode());
+    }
+
+    [Fact]
+    public void GetEffectiveTransportMode_Should_Default_To_AutoDetect()
+    {
+        var options = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080")
+        };
+        Assert.Equal(SseTransportMode.AutoDetect, options.GetEffectiveTransportMode());
     }
 }

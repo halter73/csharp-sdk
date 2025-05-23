@@ -18,7 +18,7 @@ public class StatelessServerTests(ITestOutputHelper outputHelper) : KestrelInMem
     {
         Endpoint = new Uri("http://localhost/"),
         Name = "In-memory Streamable HTTP Client",
-        UseStreamableHttp = true,
+        TransportMode = SseTransportMode.StreamableHttp,
     };
 
     private async Task StartAsync()
