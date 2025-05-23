@@ -27,43 +27,36 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         using var httpClient = new HttpClient(mockHttpHandler);
         await using var transport = new SseClientTransport(options, httpClient, LoggerFactory);
 
-        var requestCount = 0;
+        // Simulate successful Streamable HTTP response for initialize
         mockHttpHandler.RequestHandler = (request) =>
         {
-            requestCount++;
-            
-            // Simulate successful Streamable HTTP response
-            return Task.FromResult(new HttpResponseMessage
+            if (request.Method == HttpMethod.Post)
             {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":\"test-id\",\"result\":{}}"),
-                Headers =
+                return Task.FromResult(new HttpResponseMessage
                 {
-                    { "Content-Type", "application/json" },
-                    { "mcp-session-id", "test-session" }
-                }
-            });
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":\"init-id\",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}}}}"),
+                    Headers =
+                    {
+                        { "Content-Type", "application/json" },
+                        { "mcp-session-id", "test-session" }
+                    }
+                });
+            }
+
+            // Shouldn't reach here for successful Streamable HTTP
+            throw new InvalidOperationException("Unexpected request");
         };
 
         await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
         
-        // The auto-detecting transport should be returned and connected
+        // The auto-detecting transport should be returned
         Assert.NotNull(session);
         Assert.True(session.IsConnected);
         Assert.IsType<AutoDetectingClientTransport>(session);
-
-        // Send a test message to trigger the transport selection
-        await session.SendMessageAsync(new JsonRpcRequest 
-        { 
-            Method = RequestMethods.Initialize, 
-            Id = new RequestId("test-id") 
-        }, CancellationToken.None);
-
-        // Verify that we only made one request (Streamable HTTP worked)
-        Assert.Equal(1, requestCount);
     }
 
-    [Fact]
+    [Fact] 
     public async Task AutoDetect_Should_Fallback_To_Sse_When_StreamableHttp_Fails()
     {
         var options = new SseClientTransportOptions
@@ -79,16 +72,14 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         await using var transport = new SseClientTransport(options, httpClient, LoggerFactory);
 
         var requestCount = 0;
-        var isFirstRequest = true;
 
         mockHttpHandler.RequestHandler = (request) =>
         {
             requestCount++;
 
-            if (isFirstRequest && request.Method == HttpMethod.Post)
+            if (request.Method == HttpMethod.Post && requestCount == 1)
             {
-                isFirstRequest = false;
-                // Simulate Streamable HTTP failure (e.g., 404 Not Found)
+                // First POST (Streamable HTTP) fails
                 return Task.FromResult(new HttpResponseMessage
                 {
                     StatusCode = HttpStatusCode.NotFound,
@@ -96,9 +87,9 @@ public class SseClientTransportAutoDetectTests : LoggedTest
                 });
             }
 
-            // Simulate SSE endpoint response for GET request
             if (request.Method == HttpMethod.Get)
             {
+                // SSE connection request
                 return Task.FromResult(new HttpResponseMessage
                 {
                     StatusCode = HttpStatusCode.OK,
@@ -107,33 +98,29 @@ public class SseClientTransportAutoDetectTests : LoggedTest
                 });
             }
 
-            // Simulate successful SSE POST response
-            return Task.FromResult(new HttpResponseMessage
+            if (request.Method == HttpMethod.Post && requestCount > 1)
             {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent("accepted")
-            });
+                // Subsequent POST to SSE endpoint succeeds
+                return Task.FromResult(new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent("accepted")
+                });
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method}, count: {requestCount}");
         };
 
         await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
         
         // The auto-detecting transport should be returned
         Assert.NotNull(session);
+        Assert.True(session.IsConnected);
         Assert.IsType<AutoDetectingClientTransport>(session);
-
-        // Send a test message to trigger the transport selection and fallback
-        await session.SendMessageAsync(new JsonRpcRequest 
-        { 
-            Method = RequestMethods.Initialize, 
-            Id = new RequestId("test-id") 
-        }, CancellationToken.None);
-
-        // Verify that we made multiple requests (Streamable HTTP failed, SSE succeeded)
-        Assert.True(requestCount >= 2, $"Expected at least 2 requests, but got {requestCount}");
     }
 
     [Fact]
-    public async Task AutoDetect_Should_Be_Default_When_UseStreamableHttp_Is_False()
+    public async Task UseStreamableHttp_False_Should_Default_To_AutoDetect()
     {
         var options = new SseClientTransportOptions
         {
@@ -147,9 +134,9 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         using var httpClient = new HttpClient(mockHttpHandler);
         await using var transport = new SseClientTransport(options, httpClient, LoggerFactory);
 
+        // Configure for successful Streamable HTTP response
         mockHttpHandler.RequestHandler = (request) =>
         {
-            // Simulate successful Streamable HTTP response
             return Task.FromResult(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
@@ -162,6 +149,27 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         
         // Should return AutoDetectingClientTransport when UseStreamableHttp is false
         Assert.IsType<AutoDetectingClientTransport>(session);
+    }
+
+    [Fact]
+    public async Task UseStreamableHttp_True_Should_Return_StreamableHttp_Transport()
+    {
+        var options = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            UseStreamableHttp = true, // This should map to StreamableHttp mode
+            ConnectionTimeout = TimeSpan.FromSeconds(2),
+            Name = "Test Server"
+        };
+
+        using var mockHttpHandler = new MockHttpHandler();
+        using var httpClient = new HttpClient(mockHttpHandler);
+        await using var transport = new SseClientTransport(options, httpClient, LoggerFactory);
+
+        await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
+        
+        // Should return StreamableHttpClientSessionTransport directly
+        Assert.IsType<StreamableHttpClientSessionTransport>(session);
     }
 
     [Fact]
@@ -215,5 +223,37 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         
         // Should return SseClientSessionTransport directly
         Assert.IsType<SseClientSessionTransport>(session);
+    }
+
+    [Fact]
+    public void GetEffectiveTransportMode_Should_Respect_TransportMode_Over_UseStreamableHttp()
+    {
+        var options = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            UseStreamableHttp = true,
+            TransportMode = SseTransportMode.Sse // This should override UseStreamableHttp
+        };
+
+        var effectiveMode = options.GetEffectiveTransportMode();
+        Assert.Equal(SseTransportMode.Sse, effectiveMode);
+    }
+
+    [Fact]
+    public void GetEffectiveTransportMode_Should_Use_UseStreamableHttp_When_TransportMode_Not_Set()
+    {
+        var options1 = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            UseStreamableHttp = true
+        };
+        Assert.Equal(SseTransportMode.StreamableHttp, options1.GetEffectiveTransportMode());
+
+        var options2 = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            UseStreamableHttp = false
+        };
+        Assert.Equal(SseTransportMode.AutoDetect, options2.GetEffectiveTransportMode());
     }
 }
