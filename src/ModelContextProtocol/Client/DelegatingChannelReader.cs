@@ -41,7 +41,7 @@ internal sealed class DelegatingChannelReader<T> : ChannelReader<T>
     /// </summary>
     private ChannelReader<T> GetReader()
     {
-        if (!_connectionEstablished.Task.IsCompletedSuccessfully)
+        if (_connectionEstablished.Task.Status != TaskStatus.RanToCompletion)
         {
             throw new InvalidOperationException("Transport connection not yet established.");
         }
@@ -92,7 +92,7 @@ internal sealed class DelegatingChannelReader<T> : ChannelReader<T>
     public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
     {
         // First wait for the connection to be established
-        if (!_connectionEstablished.Task.IsCompletedSuccessfully)
+        if (_connectionEstablished.Task.Status != TaskStatus.RanToCompletion)
         {
             return new ValueTask<bool>(WaitForConnectionAndThenReadAsync(cancellationToken));
         }
@@ -111,7 +111,7 @@ internal sealed class DelegatingChannelReader<T> : ChannelReader<T>
     public override ValueTask<T> ReadAsync(CancellationToken cancellationToken = default)
     {
         // First wait for the connection to be established
-        if (!_connectionEstablished.Task.IsCompletedSuccessfully)
+        if (_connectionEstablished.Task.Status != TaskStatus.RanToCompletion)
         {
             return new ValueTask<T>(WaitForConnectionAndThenGetItemAsync(cancellationToken));
         }
@@ -129,27 +129,25 @@ internal sealed class DelegatingChannelReader<T> : ChannelReader<T>
 #if NETSTANDARD2_0
     public IAsyncEnumerable<T> ReadAllAsync(CancellationToken cancellationToken = default)
     {
-        return ReadAllAsyncInternal(cancellationToken);
+        // Create a simple async enumerable implementation
+        async IAsyncEnumerable<T> ReadAllAsyncImplementation()
+        {
+            while (await WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (TryRead(out var item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        return ReadAllAsyncImplementation();
     }
 #else
     /// <inheritdoc/>
     public override IAsyncEnumerable<T> ReadAllAsync(CancellationToken cancellationToken = default)
     {
-        return ReadAllAsyncInternal(cancellationToken);
+        return base.ReadAllAsync(cancellationToken);
     }
 #endif
-
-#if NETSTANDARD2_0
-    private async IAsyncEnumerable<T> ReadAllAsyncInternal(CancellationToken cancellationToken)
-#else
-    private async IAsyncEnumerable<T> ReadAllAsyncInternal([EnumeratorCancellation] CancellationToken cancellationToken)
-#endif
-    {
-        await _connectionEstablished.Task.ConfigureAwait(false);
-        
-        await foreach (var item in GetReader().ReadAllAsync(cancellationToken).ConfigureAwait(false))
-        {
-            yield return item;
-        }
-    }
 }

@@ -203,6 +203,4 @@ public class SseClientTransportAutoDetectTests : LoggedTest
         // Should return SseClientSessionTransport directly
         Assert.IsType<SseClientSessionTransport>(session);
     }
-
-
 }

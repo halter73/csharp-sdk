@@ -48,10 +48,6 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
         if (_streamableHttpTransport == null && _sseTransport == null)
         {
             var rpcRequest = message as JsonRpcRequest;
-            
-            // The first message must be an initialize request
-            Debug.Assert(rpcRequest != null && rpcRequest.Method == RequestMethods.Initialize, 
-                "First message must be an initialize request");
 
             // Try StreamableHttp first
             _streamableHttpTransport = new StreamableHttpClientSessionTransport(_options, _httpClient, _loggerFactory, _name);
@@ -73,9 +69,8 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
                     finally
                     {
                         _streamableHttpTransport = null;
+                        await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
                     }
-                    
-                    await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 
@@ -95,14 +90,16 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
                     if (_streamableHttpTransport != null)
                     {
                         await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
+                        _streamableHttpTransport = null;
                     }
                 }
-                finally
+                catch (Exception disposeEx)
                 {
-                    _streamableHttpTransport = null;
+                    LogDisposeFailed(_name, disposeEx);
                 }
                 
-                await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
+                // Propagate the original exception
+                throw;
             }
         }
         else if (_streamableHttpTransport != null)
@@ -139,7 +136,6 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
                 if (_sseTransport != null)
                 {
                     await _sseTransport.DisposeAsync().ConfigureAwait(false);
-                    _sseTransport = null;
                 }
             }
             finally
