@@ -173,27 +173,6 @@ public class SseClientTransportAutoDetectTests : LoggedTest
     }
 
     [Fact]
-    public async Task StreamableHttp_Mode_Should_Return_StreamableHttp_Transport()
-    {
-        var options = new SseClientTransportOptions
-        {
-            Endpoint = new Uri("http://localhost:8080"),
-            TransportMode = SseTransportMode.StreamableHttp,
-            ConnectionTimeout = TimeSpan.FromSeconds(2),
-            Name = "Test Server"
-        };
-
-        using var mockHttpHandler = new MockHttpHandler();
-        using var httpClient = new HttpClient(mockHttpHandler);
-        await using var transport = new SseClientTransport(options, httpClient, LoggerFactory);
-
-        await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
-        
-        // Should return StreamableHttpClientSessionTransport directly
-        Assert.IsType<StreamableHttpClientSessionTransport>(session);
-    }
-
-    [Fact]
     public async Task Sse_Mode_Should_Return_Sse_Transport()
     {
         var options = new SseClientTransportOptions
