@@ -5,12 +5,14 @@ namespace ModelContextProtocol.Client;
 /// </summary>
 public record SseClientTransportOptions
 {
+    private Uri field = default!;
+    
     /// <summary>
     /// Gets or sets the base address of the server for SSE connections.
     /// </summary>
     public required Uri Endpoint
     {
-        get;
+        get => field;
         init
         {
             if (value is null)

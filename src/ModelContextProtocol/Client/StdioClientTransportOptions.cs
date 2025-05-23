@@ -5,12 +5,14 @@ namespace ModelContextProtocol.Client;
 /// </summary>
 public record StdioClientTransportOptions
 {
+    private string field = default!;
+    
     /// <summary>
     /// Gets or sets the command to execute to start the server process.
     /// </summary>
     public required string Command
     {
-        get;
+        get => field;
         set
         {
             if (string.IsNullOrWhiteSpace(value))

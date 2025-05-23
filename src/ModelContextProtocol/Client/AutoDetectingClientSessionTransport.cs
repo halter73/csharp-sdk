@@ -10,17 +10,17 @@ namespace ModelContextProtocol.Client;
 /// A transport that automatically detects whether to use Streamable HTTP or SSE transport
 /// by trying Streamable HTTP first and falling back to SSE if that fails.
 /// </summary>
-internal sealed class AutoDetectingClientSessionTransport : ITransport
+internal sealed partial class AutoDetectingClientSessionTransport : ITransport
 {
     private readonly SseClientTransportOptions _options;
     private readonly HttpClient _httpClient;
     private readonly ILoggerFactory? _loggerFactory;
     private readonly ILogger _logger;
     private readonly string _name;
+    private readonly DelegatingChannelReader<JsonRpcMessage> _delegatingChannelReader;
     
     private StreamableHttpClientSessionTransport? _streamableHttpTransport;
     private SseClientSessionTransport? _sseTransport;
-    private readonly Channel<JsonRpcMessage> _messageChannel;
 
     public AutoDetectingClientSessionTransport(SseClientTransportOptions transportOptions, HttpClient httpClient, ILoggerFactory? loggerFactory, string endpointName)
     {
@@ -32,16 +32,15 @@ internal sealed class AutoDetectingClientSessionTransport : ITransport
         _loggerFactory = loggerFactory;
         _logger = (ILogger?)loggerFactory?.CreateLogger<AutoDetectingClientSessionTransport>() ?? NullLogger.Instance;
         _name = endpointName;
-        
-        // Unbounded channel to prevent blocking on writes
-        _messageChannel = Channel.CreateUnbounded<JsonRpcMessage>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false,
-        });
+        _delegatingChannelReader = new DelegatingChannelReader<JsonRpcMessage>(this);
     }
 
-    public ChannelReader<JsonRpcMessage> MessageReader => _messageChannel.Reader;
+    /// <summary>
+    /// Returns the active transport (either StreamableHttp or SSE)
+    /// </summary>
+    internal ITransport? ActiveTransport => _streamableHttpTransport != null ? (ITransport)_streamableHttpTransport : _sseTransport;
+
+    public ChannelReader<JsonRpcMessage> MessageReader => _delegatingChannelReader;
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
@@ -59,43 +58,47 @@ internal sealed class AutoDetectingClientSessionTransport : ITransport
             
             try
             {
+                LogAttemptingStreamableHttp(_name);
                 var response = await _streamableHttpTransport.SendInitialRequestAsync(message, cancellationToken).ConfigureAwait(false);
                 
                 // If the status code is not success, fall back to SSE
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogDebug("Streamable HTTP transport failed for {EndpointName} with status code {StatusCode}, falling back to SSE transport",
-                        _name, response.StatusCode);
+                    LogStreamableHttpFailed(_name, response.StatusCode);
                     
-                    await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
-                    _streamableHttpTransport = null;
+                    try
+                    {
+                        await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _streamableHttpTransport = null;
+                    }
                     
                     await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 
-                // Process the response
-                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                if (response.Content.Headers.ContentType?.MediaType == "application/json")
-                {
-                    await ProcessMessageFromStreamableHttpAsync(responseContent, cancellationToken).ConfigureAwait(false);
-                }
-                else if (response.Content.Headers.ContentType?.MediaType == "text/event-stream")
-                {
-                    using var responseBodyStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                    await ProcessSseResponseFromStreamableHttpAsync(responseBodyStream, rpcRequest, cancellationToken).ConfigureAwait(false);
-                }
+                // Process the streamable HTTP response using the transport
+                await _streamableHttpTransport.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
                 
-                // Start forwarding messages
-                _ = ForwardMessagesAsync(_streamableHttpTransport.MessageReader, cancellationToken);
+                // Signal that we have established a connection
+                LogUsingStreamableHttp(_name);
+                _delegatingChannelReader.SetConnected();
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Streamable HTTP transport failed for {EndpointName}, falling back to SSE transport", _name);
+                LogStreamableHttpException(_name, ex);
                 
-                if (_streamableHttpTransport != null)
+                try
                 {
-                    await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
+                    if (_streamableHttpTransport != null)
+                    {
+                        await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
                     _streamableHttpTransport = null;
                 }
                 
@@ -114,65 +117,38 @@ internal sealed class AutoDetectingClientSessionTransport : ITransport
     
     private async Task InitializeSseTransportAsync(JsonRpcMessage message, CancellationToken cancellationToken)
     {
-        _sseTransport = new SseClientSessionTransport(_options, _httpClient, _loggerFactory, _name);
-        await _sseTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        await _sseTransport.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
-        
-        // Start forwarding messages
-        _ = ForwardMessagesAsync(_sseTransport.MessageReader, cancellationToken);
-    }
-    
-    private async Task ProcessMessageFromStreamableHttpAsync(string data, CancellationToken cancellationToken)
-    {
+        Exception? capturedEx = null;
         try
         {
-            var message = System.Text.Json.JsonSerializer.Deserialize(data, McpJsonUtilities.JsonContext.Default.JsonRpcMessage);
-            if (message is null)
-            {
-                _logger.LogWarning("Failed to parse message from Streamable HTTP response for {EndpointName}", _name);
-                return;
-            }
-
-            bool wrote = _messageChannel.Writer.TryWrite(message);
-            Debug.Assert(wrote, "Failed to write message to channel");
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            _logger.LogError(ex, "Failed to parse JSON message from Streamable HTTP response for {EndpointName}", _name);
-        }
-    }
-    
-    private async Task ProcessSseResponseFromStreamableHttpAsync(Stream responseStream, JsonRpcRequest relatedRpcRequest, CancellationToken cancellationToken)
-    {
-        await foreach (System.Net.ServerSentEvents.SseItem<string> sseEvent in System.Net.ServerSentEvents.SseParser.Create(responseStream)
-                       .EnumerateAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (sseEvent.EventType != "message")
-            {
-                continue;
-            }
-
-            await ProcessMessageFromStreamableHttpAsync(sseEvent.Data, cancellationToken).ConfigureAwait(false);
-        }
-    }
-    
-    private async Task ForwardMessagesAsync(ChannelReader<JsonRpcMessage> reader, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await foreach (var message in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-            {
-                bool wrote = _messageChannel.Writer.TryWrite(message);
-                Debug.Assert(wrote, "Failed to write message to channel");
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Expected when cancelling
+            LogAttemptingSSE(_name);
+            _sseTransport = new SseClientSessionTransport(_options, _httpClient, _loggerFactory, _name);
+            await _sseTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            await _sseTransport.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+            
+            // Signal that we have established a connection
+            LogUsingSSE(_name);
+            _delegatingChannelReader.SetConnected();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error forwarding messages from active transport for {EndpointName}", _name);
+            LogSSEConnectionFailed(_name, ex);
+            capturedEx = ex;
+            
+            try
+            {
+                if (_sseTransport != null)
+                {
+                    await _sseTransport.DisposeAsync().ConfigureAwait(false);
+                    _sseTransport = null;
+                }
+            }
+            finally
+            {
+                // Set the error so the channel reader will propagate it
+                _delegatingChannelReader.SetError(ex);
+            }
+            
+            throw;
         }
     }
 
@@ -192,9 +168,33 @@ internal sealed class AutoDetectingClientSessionTransport : ITransport
                 _sseTransport = null;
             }
         }
-        finally
+        catch (Exception ex)
         {
-            _messageChannel.Writer.Complete();
+            LogDisposeFailed(_name, ex);
         }
     }
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using Streamable HTTP transport")]
+    private partial void LogAttemptingStreamableHttp(string endpointName);
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with status code {StatusCode}, falling back to SSE transport")]
+    private partial void LogStreamableHttpFailed(string endpointName, System.Net.HttpStatusCode statusCode);
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with exception, falling back to SSE transport")]
+    private partial void LogStreamableHttpException(string endpointName, Exception exception);
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using Streamable HTTP transport")]
+    private partial void LogUsingStreamableHttp(string endpointName);
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using SSE transport")]
+    private partial void LogAttemptingSSE(string endpointName);
+    
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using SSE transport")]
+    private partial void LogUsingSSE(string endpointName);
+    
+    [LoggerMessage(Level = LogLevel.Error, Message = "{EndpointName}: SSE transport connection failed")]
+    private partial void LogSSEConnectionFailed(string endpointName, Exception exception);
+    
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{EndpointName}: Error disposing transport")]
+    private partial void LogDisposeFailed(string endpointName, Exception exception);
 }
