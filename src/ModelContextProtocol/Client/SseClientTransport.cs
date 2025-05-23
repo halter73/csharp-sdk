@@ -57,11 +57,26 @@ public sealed class SseClientTransport : IClientTransport, IAsyncDisposable
     /// <inheritdoc />
     public async Task<ITransport> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        if (_options.UseStreamableHttp)
-        {
-            return new StreamableHttpClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
-        }
+        var effectiveMode = _options.GetEffectiveTransportMode();
 
+        switch (effectiveMode)
+        {
+            case SseTransportMode.StreamableHttp:
+                return new StreamableHttpClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
+
+            case SseTransportMode.Sse:
+                return await ConnectSseTransportAsync(cancellationToken).ConfigureAwait(false);
+
+            case SseTransportMode.AutoDetect:
+                return new AutoDetectingClientTransport(_options, _httpClient, _loggerFactory, Name);
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(effectiveMode), effectiveMode, "Unsupported transport mode");
+        }
+    }
+
+    private async Task<ITransport> ConnectSseTransportAsync(CancellationToken cancellationToken)
+    {
         var sessionTransport = new SseClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
 
         try
