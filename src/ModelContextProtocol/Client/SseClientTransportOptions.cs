@@ -5,14 +5,11 @@ namespace ModelContextProtocol.Client;
 /// </summary>
 public record SseClientTransportOptions
 {
-    private Uri field = default!;
-    
     /// <summary>
     /// Gets or sets the base address of the server for SSE connections.
     /// </summary>
     public required Uri Endpoint
     {
-        get => field;
         init
         {
             if (value is null)
@@ -28,9 +25,11 @@ public record SseClientTransportOptions
                 throw new ArgumentException("Endpoint must use HTTP or HTTPS scheme.", nameof(value));
             }
 
-            field = value;
+            _endpoint = value;
         }
+        get => _endpoint;
     }
+    private Uri _endpoint = null!;
 
 
 

@@ -59,17 +59,17 @@ public sealed class SseClientTransport : IClientTransport, IAsyncDisposable
     {
         switch (_options.TransportMode)
         {
+            default:
+                throw new ArgumentException($"Unsupported transport mode: {_options.TransportMode}", nameof(_options.TransportMode));
+                
+            case HttpTransportMode.AutoDetect:
+                return new AutoDetectingClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
+                
             case HttpTransportMode.StreamableHttp:
                 return new StreamableHttpClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
 
             case HttpTransportMode.Sse:
                 return await ConnectSseTransportAsync(cancellationToken).ConfigureAwait(false);
-
-            case HttpTransportMode.AutoDetect:
-                return new AutoDetectingClientSessionTransport(_options, _httpClient, _loggerFactory, Name);
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(_options.TransportMode), _options.TransportMode, "Unsupported transport mode");
         }
     }
 

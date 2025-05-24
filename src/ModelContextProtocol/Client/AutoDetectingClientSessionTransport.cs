@@ -62,15 +62,8 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
                 {
                     LogStreamableHttpFailed(_name, response.StatusCode);
                     
-                    try
-                    {
-                        await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        _streamableHttpTransport = null;
-                        await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
-                    }
+                    await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
+                    await InitializeSseTransportAsync(message, cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 
@@ -85,18 +78,7 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
             {
                 LogStreamableHttpException(_name, ex);
                 
-                try
-                {
-                    if (_streamableHttpTransport != null)
-                    {
-                        await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
-                        _streamableHttpTransport = null;
-                    }
-                }
-                catch (Exception disposeEx)
-                {
-                    LogDisposeFailed(_name, disposeEx);
-                }
+                await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
                 
                 // Propagate the original exception
                 throw;
@@ -114,11 +96,11 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
     
     private async Task InitializeSseTransportAsync(JsonRpcMessage message, CancellationToken cancellationToken)
     {
-        Exception? capturedEx = null;
+        _sseTransport = new SseClientSessionTransport(_options, _httpClient, _loggerFactory, _name);
+
         try
         {
             LogAttemptingSSE(_name);
-            _sseTransport = new SseClientSessionTransport(_options, _httpClient, _loggerFactory, _name);
             await _sseTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
             await _sseTransport.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
             
@@ -129,21 +111,8 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
         catch (Exception ex)
         {
             LogSSEConnectionFailed(_name, ex);
-            capturedEx = ex;
-            
-            try
-            {
-                if (_sseTransport != null)
-                {
-                    await _sseTransport.DisposeAsync().ConfigureAwait(false);
-                }
-            }
-            finally
-            {
-                // Set the error so the channel reader will propagate it
-                _delegatingChannelReader.SetError(ex);
-            }
-            
+            _delegatingChannelReader.SetError(ex);
+            await _sseTransport.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -155,13 +124,11 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
             if (_streamableHttpTransport != null)
             {
                 await _streamableHttpTransport.DisposeAsync().ConfigureAwait(false);
-                _streamableHttpTransport = null;
             }
             
             if (_sseTransport != null)
             {
                 await _sseTransport.DisposeAsync().ConfigureAwait(false);
-                _sseTransport = null;
             }
         }
         catch (Exception ex)
@@ -170,27 +137,27 @@ internal sealed partial class AutoDetectingClientSessionTransport : ITransport
         }
     }
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using Streamable HTTP transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using Streamable HTTP transport.")]
     private partial void LogAttemptingStreamableHttp(string endpointName);
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with status code {StatusCode}, falling back to SSE transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with status code {StatusCode}, falling back to SSE transport.")]
     private partial void LogStreamableHttpFailed(string endpointName, System.Net.HttpStatusCode statusCode);
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with exception, falling back to SSE transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Streamable HTTP transport failed with exception, falling back to SSE transport.")]
     private partial void LogStreamableHttpException(string endpointName, Exception exception);
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using Streamable HTTP transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using Streamable HTTP transport.")]
     private partial void LogUsingStreamableHttp(string endpointName);
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using SSE transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Attempting to connect using SSE transport.")]
     private partial void LogAttemptingSSE(string endpointName);
     
-    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using SSE transport")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{EndpointName}: Using SSE transport.")]
     private partial void LogUsingSSE(string endpointName);
     
-    [LoggerMessage(Level = LogLevel.Error, Message = "{EndpointName}: SSE transport connection failed")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "{EndpointName}: Failed to connect using both Streamable HTTP and SSE transports.")]
     private partial void LogSSEConnectionFailed(string endpointName, Exception exception);
     
-    [LoggerMessage(Level = LogLevel.Warning, Message = "{EndpointName}: Error disposing transport")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{EndpointName}: Error disposing transport.")]
     private partial void LogDisposeFailed(string endpointName, Exception exception);
 }

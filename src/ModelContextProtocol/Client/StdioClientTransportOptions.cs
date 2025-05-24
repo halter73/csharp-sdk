@@ -5,24 +5,23 @@ namespace ModelContextProtocol.Client;
 /// </summary>
 public record StdioClientTransportOptions
 {
-    private string field = default!;
-    
     /// <summary>
     /// Gets or sets the command to execute to start the server process.
     /// </summary>
     public required string Command
     {
-        get => field;
-        set
+        init
         {
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new ArgumentException("Command cannot be null or empty.", nameof(value));
             }
 
-            field = value;
+            _command = value;
         }
+        get => _command;
     }
+    private string _command = null!;
 
     /// <summary>
     /// Gets or sets the arguments to pass to the server process when it is started.

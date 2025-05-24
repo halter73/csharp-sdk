@@ -63,29 +63,25 @@ internal sealed class DelegatingChannelReader<T> : ChannelReader<T>
     /// <inheritdoc/>
     public override bool TryPeek(out T item)
     {
-        try
-        {
-            return GetReader().TryPeek(out item!);
-        }
-        catch (InvalidOperationException)
+        if (_connectionEstablished.Task.Status != TaskStatus.RanToCompletion)
         {
             item = default!;
             return false;
         }
+
+        return GetReader().TryPeek(out item!);
     }
 
     /// <inheritdoc/>
     public override bool TryRead(out T item)
     {
-        try
-        {
-            return GetReader().TryRead(out item!);
-        }
-        catch (InvalidOperationException)
+        if (_connectionEstablished.Task.Status != TaskStatus.RanToCompletion)
         {
             item = default!;
             return false;
         }
+
+        return GetReader().TryRead(out item!);
     }
 
     /// <inheritdoc/>

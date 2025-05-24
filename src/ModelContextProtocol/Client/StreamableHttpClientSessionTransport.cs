@@ -50,7 +50,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         JsonRpcMessage message,
         CancellationToken cancellationToken = default)
     {
-        using var response = await SendHttpRequestInternalAsync(message, disposeResponse: true, cancellationToken);
+        using var response = await SendHttpRequestInternalAsync(message, cancellationToken);
 
         var rpcRequest = message as JsonRpcRequest;
         JsonRpcMessage? rpcResponseCandidate = null;
@@ -188,19 +188,17 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         JsonRpcMessage message,
         CancellationToken cancellationToken = default)
     {
-        return await SendHttpRequestInternalAsync(message, disposeResponse: false, cancellationToken);
+        return await SendHttpRequestInternalAsync(message, cancellationToken);
     }
 
     /// <summary>
     /// Internal implementation to send an HTTP request with the specified message.
     /// </summary>
     /// <param name="message">The message to send.</param>
-    /// <param name="disposeResponse">Whether to dispose the response automatically.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The HTTP response message.</returns>
     private async Task<HttpResponseMessage> SendHttpRequestInternalAsync(
         JsonRpcMessage message, 
-        bool disposeResponse, 
         CancellationToken cancellationToken)
     {
         using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _connectionCts.Token);
@@ -228,12 +226,6 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         CopyAdditionalHeaders(httpRequestMessage.Headers, _options.AdditionalHeaders, _mcpSessionId);
         
         var response = await _httpClient.SendAsync(httpRequestMessage, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        
-        if (disposeResponse)
-        {
-            response.EnsureSuccessStatusCode();
-            return response;
-        }
         
         return response;
     }
