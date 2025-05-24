@@ -443,7 +443,7 @@ internal static partial class UriTemplate
             Span<byte> utf8 = stackalloc byte[Encoding.UTF8.GetMaxByteCount(1)];
             foreach (byte b in utf8.Slice(0, new Rune(c).EncodeToUtf8(utf8)))
 #else
-                foreach (byte b in Encoding.UTF8.GetBytes([c]))
+                foreach (byte b in Encoding.UTF8.GetBytes(c.ToString()))
 #endif
                 {
                     builder.AppendFormatted('%');

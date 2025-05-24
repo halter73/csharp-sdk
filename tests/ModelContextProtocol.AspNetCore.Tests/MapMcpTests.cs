@@ -20,14 +20,22 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         options.Stateless = Stateless;
     }
 
-    protected async Task<IMcpClient> ConnectAsync(string? path = null)
+    protected async Task<IMcpClient> ConnectAsync(string? path = null, SseClientTransportOptions? options = null)
     {
+        if (options != null)
+        {
+            // When options are provided, use them as-is
+            await using var transport = new SseClientTransport(options, HttpClient, LoggerFactory);
+            return await McpClientFactory.CreateAsync(transport, loggerFactory: LoggerFactory, cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        // Default behavior when no options are provided
         path ??= UseStreamableHttp ? "/" : "/sse";
 
         var sseClientTransportOptions = new SseClientTransportOptions()
         {
             Endpoint = new Uri($"http://localhost{path}"),
-            UseStreamableHttp = UseStreamableHttp,
+            TransportMode = UseStreamableHttp ? HttpTransportMode.StreamableHttp : HttpTransportMode.Sse,
         };
         await using var transport = new SseClientTransport(sseClientTransportOptions, HttpClient, LoggerFactory);
         return await McpClientFactory.CreateAsync(transport, loggerFactory: LoggerFactory, cancellationToken: TestContext.Current.CancellationToken);

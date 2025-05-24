@@ -10,17 +10,18 @@ public record StdioClientTransportOptions
     /// </summary>
     public required string Command
     {
-        get;
-        set
+        init
         {
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new ArgumentException("Command cannot be null or empty.", nameof(value));
             }
 
-            field = value;
+            _command = value;
         }
+        get => _command;
     }
+    private string _command = null!;
 
     /// <summary>
     /// Gets or sets the arguments to pass to the server process when it is started.
