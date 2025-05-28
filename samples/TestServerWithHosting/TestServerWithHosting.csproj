@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ModelContextProtocol.AspNetCore\ModelContextProtocol.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\ModelContextProtocol.Hosting\ModelContextProtocol.Hosting.csproj" />
   </ItemGroup>
 
 </Project>
