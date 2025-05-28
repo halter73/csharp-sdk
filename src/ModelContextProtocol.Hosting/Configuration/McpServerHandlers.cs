@@ -14,8 +14,9 @@ namespace ModelContextProtocol.Server;
 /// the behavior of the MCP server by providing implementations for the various protocol operations.
 /// </para>
 /// <para>
-/// Handlers can be configured individually using the extension methods in McpServerBuilderExtensions
-/// such as WithListToolsHandler and WithCallToolHandler.
+/// Handlers can be configured individually using the extension methods in <see cref="McpServerBuilderExtensions"/>
+/// such as <see cref="McpServerBuilderExtensions.WithListToolsHandler"/> and
+/// <see cref="McpServerBuilderExtensions.WithCallToolHandler"/>.
 /// </para>
 /// <para>
 /// When a client sends a request to the server, the appropriate handler is invoked to process the

@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Server;
 
-namespace ModelContextProtocol.Hosting.Configuration;
+namespace ModelContextProtocol.AspNetCore.Configuration;
 
 /// <summary>
 /// Hosted service for a single-session (e.g. stdio) MCP server.
