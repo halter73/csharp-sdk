@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net9.0;net8.0;netstandard2.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
-    <PackageId>ModelContextProtocol.Hosting</PackageId>
-    <Description>Hosting and dependency injection extensions for the C# Model Context Protocol (MCP) SDK.</Description>
+    <PackageId>ModelContextProtocol</PackageId>
+    <Description>.NET SDK for the Model Context Protocol (MCP) with hosting and dependency injection extensions.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="README.md" pack="true" PackagePath="\" />
+    <None Include="..\..\README.md" pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
