@@ -637,6 +637,65 @@ public class StreamableHttpServerConformanceTests(ITestOutputHelper outputHelper
         AssertEchoResponse(rpcResponse);
     }
 
+    [Fact]
+    public async Task JsonRpcRequest_WithSameIdAsResponse_DoesNotCloseStream()
+    {
+        await StartAsync();
+        await CallInitializeAndValidateAsync();
+
+        // This test verifies the fix for the issue where JsonRpcRequest messages
+        // (like sampling requests) with the same ID as the pending response
+        // would incorrectly close the SSE stream in StopOnFinalResponseFilter
+        using var response = await HttpClient.PostAsync("", JsonContent(CallTool("echo", """{"message":"test"}""")), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
+
+        var sseEvents = new List<string>();
+        await foreach (var sseEvent in ReadSseAsync(response.Content))
+        {
+            sseEvents.Add(sseEvent);
+        }
+
+        // Should have received exactly one event (the tool response)
+        Assert.Single(sseEvents);
+        
+        var finalResponse = JsonSerializer.Deserialize(sseEvents[0], GetJsonTypeInfo<JsonRpcResponse>());
+        Assert.NotNull(finalResponse);
+        
+        var callToolResponse = AssertType<CallToolResponse>(finalResponse.Result);
+        var callToolContent = Assert.Single(callToolResponse.Content);
+        Assert.Equal("text", callToolContent.Type);
+        Assert.Equal("test", callToolContent.Text);
+    }
+
+    [Fact] 
+    public async Task JsonRpcError_WithMatchingId_ClosesStream()
+    {
+        await StartAsync();
+        await CallInitializeAndValidateAsync();
+
+        // Test that JsonRpcError messages do close the stream (expected behavior)
+        using var response = await HttpClient.PostAsync("", JsonContent(CallTool("throw")), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sseEvents = new List<string>();
+        await foreach (var sseEvent in ReadSseAsync(response.Content))
+        {
+            sseEvents.Add(sseEvent);
+        }
+
+        // Should receive exactly one event - the error response
+        Assert.Single(sseEvents);
+        
+        var errorResponse = JsonSerializer.Deserialize(sseEvents[0], GetJsonTypeInfo<JsonRpcResponse>());
+        Assert.NotNull(errorResponse);
+        
+        // The response should contain an error from the throw tool
+        var callToolResponse = AssertType<CallToolResponse>(errorResponse.Result);
+        var callToolContent = Assert.Single(callToolResponse.Content);
+        Assert.Contains("throw", callToolContent.Text);
+    }
+
     [McpServerTool(Name = "echo")]
     private static async Task<string> EchoAsync(string message)
     {
