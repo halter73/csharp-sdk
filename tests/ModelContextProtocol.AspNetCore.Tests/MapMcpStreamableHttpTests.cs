@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ModelContextProtocol.AspNetCore.Tests;
 
@@ -142,5 +144,63 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         });
 
         Assert.Equal("SseTestServer", mcpClient.ServerInfo.Name);
+    }
+
+    [Fact]
+    public async Task StreamableHttpClient_SendsMcpProtocolVersionHeader_AfterInitialization()
+    {
+        // Arrange: Capture incoming request headers
+        var capturedHeaders = new List<(string Name, string Value)>();
+
+        Builder.Services.AddMcpServer(options =>
+        {
+            options.ServerInfo = new()
+            {
+                Name = "ProtocolVersionTestServer",
+                Version = "1.0.0",
+            };
+        }).WithHttpTransport(ConfigureStateless).WithTools<TestTool>();
+
+        await using var app = Builder.Build();
+
+        // Add middleware to capture request headers
+        app.Use(next =>
+        {
+            return async context =>
+            {
+                // Capture headers from non-initialization requests only
+                if (context.Request.Method == "POST" && context.Request.Path == "/")
+                {
+                    var headers = context.Request.Headers.ToList();
+                    capturedHeaders.AddRange(headers.SelectMany(h => h.Value.Where(v => v != null).Select(v => (h.Key, v!))));
+                }
+                await next(context);
+            };
+        });
+
+        app.MapMcp();
+
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        // Act: Connect and make a request (this should send the protocol version header)
+        await using var mcpClient = await ConnectAsync();
+
+        // Make a request that should include the MCP-Protocol-Version header
+        var tools = await mcpClient.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert: Verify the MCP-Protocol-Version header was sent
+        var protocolVersionHeaders = capturedHeaders
+            .Where(h => h.Name.Equals("MCP-Protocol-Version", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.NotEmpty(protocolVersionHeaders);
+        Assert.Contains(protocolVersionHeaders, h => h.Value == "2024-11-05");
+    }
+
+    [McpServerToolType]
+    private class TestTool
+    {
+        [McpServerTool]
+        public static string Echo(string message) => $"Echo: {message}";
     }
 }
