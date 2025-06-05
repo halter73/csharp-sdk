@@ -28,6 +28,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
     private readonly ILogger _logger;
 
     private string? _mcpSessionId;
+    private string? _negotiatedProtocolVersion;
     private Task? _getReceiveTask;
 
     public StreamableHttpClientSessionTransport(
@@ -50,6 +51,15 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         // until the first call to SendMessageAsync. Fortunately, that happens internally in McpClientFactory.ConnectAsync
         // so we still throw any connection-related Exceptions from there and never expose a pre-connected client to the user.
         SetConnected();
+    }
+
+    /// <summary>
+    /// Sets the negotiated protocol version to be included in HTTP headers.
+    /// </summary>
+    /// <param name="protocolVersion">The protocol version negotiated during initialization.</param>
+    internal void SetNegotiatedProtocolVersion(string protocolVersion)
+    {
+        _negotiatedProtocolVersion = protocolVersion;
     }
 
     /// <inheritdoc/>
@@ -85,7 +95,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
             },
         };
 
-        CopyAdditionalHeaders(httpRequestMessage.Headers, _options.AdditionalHeaders, _mcpSessionId);
+        CopyAdditionalHeaders(httpRequestMessage.Headers, _options.AdditionalHeaders, _mcpSessionId, _negotiatedProtocolVersion);
 
         var response = await _httpClient.SendAsync(httpRequestMessage, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
@@ -170,7 +180,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         // Send a GET request to handle any unsolicited messages not sent over a POST response.
         using var request = new HttpRequestMessage(HttpMethod.Get, _options.Endpoint);
         request.Headers.Accept.Add(s_textEventStreamMediaType);
-        CopyAdditionalHeaders(request.Headers, _options.AdditionalHeaders, _mcpSessionId);
+        CopyAdditionalHeaders(request.Headers, _options.AdditionalHeaders, _mcpSessionId, _negotiatedProtocolVersion);
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _connectionCts.Token).ConfigureAwait(false);
 
@@ -245,11 +255,16 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         }
     }
 
-    internal static void CopyAdditionalHeaders(HttpRequestHeaders headers, Dictionary<string, string>? additionalHeaders, string? sessionId = null)
+    internal static void CopyAdditionalHeaders(HttpRequestHeaders headers, Dictionary<string, string>? additionalHeaders, string? sessionId = null, string? protocolVersion = null)
     {
         if (sessionId is not null)
         {
             headers.Add("mcp-session-id", sessionId);
+        }
+
+        if (protocolVersion is not null)
+        {
+            headers.Add("MCP-Protocol-Version", protocolVersion);
         }
 
         if (additionalHeaders is null)

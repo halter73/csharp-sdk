@@ -168,6 +168,17 @@ internal sealed partial class McpClient : McpEndpoint, IMcpClient
                 await SendMessageAsync(
                     new JsonRpcNotification { Method = NotificationMethods.InitializedNotification },
                     initializationCts.Token).ConfigureAwait(false);
+
+                // Set the negotiated protocol version on the transport for HTTP header inclusion
+                if (_sessionTransport is StreamableHttpClientSessionTransport httpTransport)
+                {
+                    httpTransport.SetNegotiatedProtocolVersion(initializeResponse.ProtocolVersion);
+                }
+                else if (_sessionTransport is AutoDetectingClientSessionTransport autoTransport && 
+                         autoTransport.ActiveTransport is StreamableHttpClientSessionTransport activeHttpTransport)
+                {
+                    activeHttpTransport.SetNegotiatedProtocolVersion(initializeResponse.ProtocolVersion);
+                }
             }
             catch (OperationCanceledException oce) when (initializationCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
