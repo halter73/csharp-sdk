@@ -188,9 +188,9 @@ public class MapMcpStreamableHttpTests(ITestOutputHelper outputHelper) : MapMcpT
         // Make a request that should include the MCP-Protocol-Version header
         var tools = await mcpClient.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert: Verify the MCP-Protocol-Version header was sent
+        // Assert: Verify the mcp-protocol-version header was sent
         var protocolVersionHeaders = capturedHeaders
-            .Where(h => h.Name.Equals("MCP-Protocol-Version", StringComparison.OrdinalIgnoreCase))
+            .Where(h => h.Name.Equals("mcp-protocol-version", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         Assert.NotEmpty(protocolVersionHeaders);

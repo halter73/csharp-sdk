@@ -53,14 +53,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
         SetConnected();
     }
 
-    /// <summary>
-    /// Sets the negotiated protocol version to be included in HTTP headers.
-    /// </summary>
-    /// <param name="protocolVersion">The protocol version negotiated during initialization.</param>
-    internal void SetNegotiatedProtocolVersion(string protocolVersion)
-    {
-        _negotiatedProtocolVersion = protocolVersion;
-    }
+
 
     /// <inheritdoc/>
     public override async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
@@ -129,12 +122,30 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
             throw new McpException($"Streamable HTTP POST response completed without a reply to request with ID: {rpcRequest.Id}");
         }
 
-        if (rpcRequest.Method == RequestMethods.Initialize && rpcResponseOrError is JsonRpcResponse)
+        if (rpcRequest.Method == RequestMethods.Initialize && rpcResponseOrError is JsonRpcResponse initResponse)
         {
-            // We've successfully initialized! Copy session-id and start GET request if any.
+            // We've successfully initialized! Copy session-id and protocol version, then start GET request if any.
             if (response.Headers.TryGetValues("mcp-session-id", out var sessionIdValues))
             {
                 _mcpSessionId = sessionIdValues.FirstOrDefault();
+            }
+
+            // Parse the InitializeResult to get the negotiated protocol version
+            if (initResponse.Result is not null)
+            {
+                try
+                {
+                    var initializeResult = JsonSerializer.Deserialize(initResponse.Result, McpJsonUtilities.JsonContext.Default.InitializeResult);
+                    if (initializeResult is not null)
+                    {
+                        _negotiatedProtocolVersion = initializeResult.ProtocolVersion;
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    // Log the error but don't fail the initialization
+                    _logger?.LogWarning(ex, "Failed to parse InitializeResult for protocol version");
+                }
             }
 
             _getReceiveTask = ReceiveUnsolicitedMessagesAsync();
@@ -264,7 +275,7 @@ internal sealed partial class StreamableHttpClientSessionTransport : TransportBa
 
         if (protocolVersion is not null)
         {
-            headers.Add("MCP-Protocol-Version", protocolVersion);
+            headers.Add("mcp-protocol-version", protocolVersion);
         }
 
         if (additionalHeaders is null)
