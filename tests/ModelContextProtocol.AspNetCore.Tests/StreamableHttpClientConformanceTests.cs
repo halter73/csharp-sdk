@@ -14,9 +14,12 @@ namespace ModelContextProtocol.AspNetCore.Tests;
 public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper) : KestrelInMemoryTest(outputHelper), IAsyncDisposable
 {
     private WebApplication? _app;
+    private static readonly List<string> DeleteRequests = new();
 
     private async Task StartAsync()
     {
+        DeleteRequests.Clear();
+        
         Builder.Services.Configure<JsonOptions>(options =>
         {
             options.SerializerOptions.TypeInfoResolverChain.Add(McpJsonUtilities.DefaultOptions.TypeInfoResolver!);
@@ -28,7 +31,7 @@ public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper
             Services = _app.Services,
         });
 
-        _app.MapPost("/mcp", (JsonRpcMessage message) =>
+        _app.MapPost("/mcp", (JsonRpcMessage message, HttpContext context) =>
         {
             if (message is not JsonRpcRequest request)
             {
@@ -38,7 +41,7 @@ public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper
 
             if (request.Method == "initialize")
             {
-                return Results.Json(new JsonRpcResponse
+                var response = Results.Json(new JsonRpcResponse
                 {
                     Id = request.Id,
                     Result = JsonSerializer.SerializeToNode(new InitializeResult
@@ -55,6 +58,10 @@ public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper
                         },
                     }, McpJsonUtilities.DefaultOptions)
                 });
+
+                // Add a session ID to the response to enable session tracking
+                context.Response.Headers.Append("mcp-session-id", "test-session-123");
+                return response;
             }
 
             if (request.Method == "tools/list")
@@ -85,6 +92,14 @@ public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper
             }
 
             throw new Exception("Unexpected message!");
+        });
+
+        // Add a DELETE endpoint to track if DELETE requests are sent
+        _app.MapDelete("/mcp", (HttpContext context) =>
+        {
+            var sessionId = context.Request.Headers["mcp-session-id"].ToString();
+            DeleteRequests.Add(sessionId);
+            return Results.Ok();
         });
 
         await _app.StartAsync(TestContext.Current.CancellationToken);
@@ -134,6 +149,35 @@ public class StreamableHttpClientConformanceTests(ITestOutputHelper outputHelper
         }
 
         await Task.WhenAll(echoTasks);
+    }
+
+    [Fact]
+    public async Task SendsDeleteRequestOnDispose()
+    {
+        await StartAsync();
+
+        await using var transport = new SseClientTransport(new()
+        {
+            Endpoint = new("http://localhost/mcp"),
+            TransportMode = HttpTransportMode.StreamableHttp,
+        }, HttpClient, LoggerFactory);
+
+        await using var client = await McpClientFactory.CreateAsync(transport, loggerFactory: LoggerFactory, cancellationToken: TestContext.Current.CancellationToken);
+        
+        // Make sure we have a session established
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var echoTool = Assert.Single(tools);
+        Assert.Equal("echo", echoTool.Name);
+
+        // Clear any previous DELETE requests
+        DeleteRequests.Clear();
+
+        // Dispose should trigger DELETE request
+        await client.DisposeAsync();
+
+        // Verify DELETE request was sent with correct session ID
+        Assert.Single(DeleteRequests);
+        Assert.Equal("test-session-123", DeleteRequests[0]);
     }
 
     private static async Task CallEchoAndValidateAsync(McpClientTool echoTool)

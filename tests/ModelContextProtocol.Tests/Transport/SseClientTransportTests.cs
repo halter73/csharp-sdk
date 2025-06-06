@@ -2,6 +2,8 @@
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Tests.Utils;
 using System.Net;
+using System.Text.Json;
+using System.Linq;
 
 namespace ModelContextProtocol.Tests.Transport;
 
@@ -172,5 +174,103 @@ public class SseClientTransportTests : LoggedTest
 
         var transportBase = Assert.IsAssignableFrom<TransportBase>(session);
         Assert.False(transportBase.IsConnected);
+    }
+
+    [Fact]
+    public async Task StreamableHttpTransport_SendsDeleteRequestOnDispose()
+    {
+        using var mockHttpHandler = new MockHttpHandler();
+        using var httpClient = new HttpClient(mockHttpHandler);
+
+        var streamableHttpOptions = new SseClientTransportOptions
+        {
+            Endpoint = new Uri("http://localhost:8080"),
+            ConnectionTimeout = TimeSpan.FromSeconds(2),
+            Name = "Test Server",
+            TransportMode = HttpTransportMode.StreamableHttp,
+            AdditionalHeaders = new Dictionary<string, string>
+            {
+                ["test"] = "header"
+            }
+        };
+
+        var requestCount = 0;
+        var deleteRequestReceived = false;
+        string? deleteSessionId = null;
+
+        mockHttpHandler.RequestHandler = (request) =>
+        {
+            requestCount++;
+
+            if (request.Method == HttpMethod.Post)
+            {
+                // Simulate initialize response
+                var response = new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent("""
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "serverInfo": { "name": "test", "version": "1.0" }
+                        }
+                    }
+                    """, System.Text.Encoding.UTF8, "application/json")
+                };
+                response.Headers.Add("mcp-session-id", "test-session-123");
+                return Task.FromResult(response);
+            }
+            else if (request.Method == HttpMethod.Delete)
+            {
+                deleteRequestReceived = true;
+                deleteSessionId = request.Headers.GetValues("mcp-session-id").FirstOrDefault();
+                
+                // Return OK - though per spec we should ignore non-successful responses too
+                return Task.FromResult(new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.OK
+                });
+            }
+            else if (request.Method == HttpMethod.Get)
+            {
+                // Return a failure for GET to avoid the unsolicited messages task
+                return Task.FromResult(new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.NotFound
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.NotFound
+            });
+        };
+
+        await using var transport = new SseClientTransport(streamableHttpOptions, httpClient, LoggerFactory);
+        
+        // Connect and initialize
+        await using var session = await transport.ConnectAsync(TestContext.Current.CancellationToken);
+        await session.SendMessageAsync(new JsonRpcRequest() 
+        { 
+            Method = RequestMethods.Initialize, 
+            Id = new RequestId(1),
+            Params = JsonSerializer.SerializeToNode(new InitializeRequestParams
+            {
+                ProtocolVersion = "2024-11-05",
+                Capabilities = new(),
+                ClientInfo = new Implementation { Name = "test", Version = "1.0" }
+            }, McpJsonUtilities.DefaultOptions)
+        }, CancellationToken.None);
+
+        // Dispose should trigger DELETE request
+        await session.DisposeAsync();
+
+        // Verify DELETE request was sent with correct session ID
+        Assert.True(deleteRequestReceived, "DELETE request should have been sent during dispose");
+        Assert.Equal("test-session-123", deleteSessionId);
+        Assert.True(requestCount >= 2, $"Expected at least 2 requests (POST, DELETE), got {requestCount}");
     }
 }
