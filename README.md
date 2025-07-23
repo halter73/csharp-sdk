@@ -228,6 +228,65 @@ await using IMcpServer server = McpServerFactory.Create(new StdioServerTransport
 await server.RunAsync();
 ```
 
+## Getting Started (ASP.NET Core Server)
+
+For HTTP-based MCP servers that need to be accessible over the web, you can use the ASP.NET Core extensions. This approach is ideal for servers that need to handle HTTP requests or be deployed as web services.
+
+```
+dotnet new web
+dotnet add package ModelContextProtocol.AspNetCore --prerelease
+```
+
+```csharp
+// Program.cs
+using ModelContextProtocol.Server;
+using System.ComponentModel;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithToolsFromAssembly();
+var app = builder.Build();
+
+app.MapMcp();
+
+app.Run("http://localhost:3001");
+
+[McpServerToolType]
+public static class EchoTool
+{
+    [McpServerTool, Description("Echoes the message back to the client.")]
+    public static string Echo(string message) => $"hello {message}";
+}
+```
+
+The ASP.NET Core approach supports the same tool and prompt patterns as the standard server, including dependency injection and async methods. You can add more sophisticated tools that leverage ASP.NET Core services:
+
+```csharp
+[McpServerToolType]
+public class WeatherTool
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+    
+    public WeatherTool(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+    
+    [McpServerTool, Description("Gets current weather for a city")]
+    public async Task<string> GetWeather(
+        [Description("The city name")] string city,
+        CancellationToken cancellationToken)
+    {
+        var httpClient = _httpClientFactory.CreateClient();
+        // Implementation would call a weather API
+        return $"The weather in {city} is sunny and 75°F";
+    }
+}
+```
+
+For more details about ASP.NET Core specific features, see the [ModelContextProtocol.AspNetCore documentation](src/ModelContextProtocol.AspNetCore/README.md).
+
 ## Acknowledgements
 
 The starting point for this library was a project called [mcpdotnet](https://github.com/PederHP/mcpdotnet), initiated by [Peder Holdgaard Pedersen](https://github.com/PederHP). We are grateful for the work done by Peder and other contributors to that repository, which created a solid foundation for this library.
