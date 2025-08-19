@@ -150,6 +150,15 @@ public abstract class McpServerResource : IMcpServerPrimitive
     public virtual Resource? ProtocolResource => ProtocolResourceTemplate.AsResource();
 
     /// <summary>
+    /// Gets the metadata for this resource instance.
+    /// </summary>
+    /// <remarks>
+    /// Contains attributes from the associated MethodInfo and declaring class (if any),
+    /// with class-level attributes appearing before method-level attributes.
+    /// </remarks>
+    public abstract IList<object> Metadata { get; }
+
+    /// <summary>
     /// Gets the resource, rendering it with the provided request parameters and returning the resource result.
     /// </summary>
     /// <param name="request">

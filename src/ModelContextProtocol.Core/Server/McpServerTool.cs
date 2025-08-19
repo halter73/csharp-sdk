@@ -141,6 +141,15 @@ public abstract class McpServerTool : IMcpServerPrimitive
     /// <summary>Gets the protocol <see cref="Tool"/> type for this instance.</summary>
     public abstract Tool ProtocolTool { get; }
 
+    /// <summary>
+    /// Gets the metadata for this tool instance.
+    /// </summary>
+    /// <remarks>
+    /// Contains attributes from the associated MethodInfo and declaring class (if any),
+    /// with class-level attributes appearing before method-level attributes.
+    /// </remarks>
+    public abstract IList<object> Metadata { get; }
+
     /// <summary>Invokes the <see cref="McpServerTool"/>.</summary>
     /// <param name="request">The request information resulting in the invocation of this tool.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>

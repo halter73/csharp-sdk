@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel;
 
 namespace AspNetCoreMcpServer.Tools;
@@ -11,6 +12,7 @@ namespace AspNetCoreMcpServer.Tools;
 public sealed class SampleLlmTool
 {
     [McpServerTool(Name = "sampleLLM"), Description("Samples from an LLM using MCP's sampling feature")]
+    [Authorize(Roles = "Admin")] // This tool requires Admin role
     public static async Task<string> SampleLLM(
         IMcpServer thisServer,
         [Description("The prompt to send to the LLM")] string prompt,
@@ -27,5 +29,12 @@ public sealed class SampleLlmTool
         var samplingResponse = await thisServer.AsSamplingChatClient().GetResponseAsync(prompt, options, cancellationToken);
 
         return $"LLM sampling result: {samplingResponse}";
+    }
+
+    [McpServerTool, Description("A simple LLM tool that allows anonymous access")]
+    [AllowAnonymous]
+    public static string SimpleLLM([Description("The input message")] string message)
+    {
+        return $"Simple LLM response: {message}";
     }
 }

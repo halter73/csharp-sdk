@@ -17,6 +17,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 {
     private readonly ILogger _logger;
     private readonly bool _structuredOutputRequiresWrapping;
+    private readonly IList<object> _metadata;
 
     /// <summary>
     /// Creates an <see cref="McpServerTool"/> instance for a method, specified via a <see cref="Delegate"/> instance.
@@ -26,7 +27,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
         McpServerToolCreateOptions? options)
     {
         Throw.IfNull(method);
-        
+
         options = DeriveOptions(method.Method, options);
 
         return Create(method.Method, method.Target, options);
@@ -46,7 +47,8 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
     }
 
     /// <summary>
@@ -68,7 +70,46 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
                 Debug.Assert(args.Services is RequestServiceProvider<CallToolRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<CallToolRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<CallToolRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
+    }
+
+    /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
+    /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
+    internal static AIFunctionMcpServerTool Create(AIFunction function, McpServerToolCreateOptions? options, IList<object> metadata)
+    {
+        Throw.IfNull(function);
+
+        Tool tool = new()
+        {
+            Name = options?.Name ?? function.Name,
+            Description = options?.Description ?? function.Description,
+            InputSchema = function.JsonSchema,
+            OutputSchema = CreateOutputSchema(function, options, out bool structuredOutputRequiresWrapping),
+        };
+
+        if (options is not null)
+        {
+            if (options.Title is not null ||
+                options.Idempotent is not null ||
+                options.Destructive is not null ||
+                options.OpenWorld is not null ||
+                options.ReadOnly is not null)
+            {
+                tool.Title = options.Title;
+
+                tool.Annotations = new()
+                {
+                    Title = options.Title,
+                    IdempotentHint = options.Idempotent,
+                    DestructiveHint = options.Destructive,
+                    OpenWorldHint = options.OpenWorld,
+                    ReadOnlyHint = options.ReadOnly,
+                };
+            }
+        }
+
+        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, metadata);
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -146,7 +187,24 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
             }
         }
 
-        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping);
+        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, []);
+    }
+
+    /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
+    private static IList<object> CreateMetadata(MethodInfo method)
+    {
+        List<object> metadata = [];
+
+        // Add class-level attributes first
+        if (method.DeclaringType is not null)
+        {
+            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
+        }
+
+        // Add method-level attributes second
+        metadata.AddRange(method.GetCustomAttributes());
+
+        return metadata.AsReadOnly();
     }
 
     private static McpServerToolCreateOptions DeriveOptions(MethodInfo method, McpServerToolCreateOptions? options)
@@ -193,16 +251,22 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerTool"/> class.</summary>
-    private AIFunctionMcpServerTool(AIFunction function, Tool tool, IServiceProvider? serviceProvider, bool structuredOutputRequiresWrapping)
+    private AIFunctionMcpServerTool(AIFunction function, Tool tool, IServiceProvider? serviceProvider, bool structuredOutputRequiresWrapping, IList<object> metadata)
     {
         AIFunction = function;
         ProtocolTool = tool;
+        ProtocolTool.McpServerTool = this;
+
         _logger = serviceProvider?.GetService<ILoggerFactory>()?.CreateLogger<McpServerTool>() ?? (ILogger)NullLogger.Instance;
         _structuredOutputRequiresWrapping = structuredOutputRequiresWrapping;
+        _metadata = metadata;
     }
 
     /// <inheritdoc />
     public override Tool ProtocolTool { get; }
+
+    /// <inheritdoc />
+    public override IList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<CallToolResult> InvokeAsync(
@@ -257,27 +321,27 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
                 Content = [],
                 StructuredContent = structuredContent,
             },
-            
+
             string text => new()
             {
                 Content = [new TextContentBlock { Text = text }],
                 StructuredContent = structuredContent,
             },
-            
+
             ContentBlock content => new()
             {
                 Content = [content],
                 StructuredContent = structuredContent,
             },
-            
+
             IEnumerable<AIContent> contentItems => ConvertAIContentEnumerableToCallToolResult(contentItems, structuredContent),
-            
+
             IEnumerable<ContentBlock> contents => new()
             {
                 Content = [.. contents],
                 StructuredContent = structuredContent,
             },
-            
+
             CallToolResult callToolResponse => callToolResponse,
 
             _ => new()
