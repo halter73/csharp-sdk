@@ -707,6 +707,217 @@ public static partial class McpServerBuilderExtensions
     }
     #endregion
 
+    #region Filters
+    /// <summary>
+    /// Adds a filter to the list resource templates handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseListResourceTemplatesFilter(this IMcpServerBuilder builder, Func<ListResourceTemplatesHandler, ListResourceTemplatesHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddListResourceTemplatesFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the list tools handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseListToolsFilter(this IMcpServerBuilder builder, Func<ListToolsHandler, ListToolsHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddListToolsFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the call tool handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseCallToolFilter(this IMcpServerBuilder builder, Func<CallToolHandler, CallToolHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddCallToolFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the list prompts handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseListPromptsFilter(this IMcpServerBuilder builder, Func<ListPromptsHandler, ListPromptsHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddListPromptsFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the get prompt handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseGetPromptFilter(this IMcpServerBuilder builder, Func<GetPromptHandler, GetPromptHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddGetPromptFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the list resources handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseListResourcesFilter(this IMcpServerBuilder builder, Func<ListResourcesHandler, ListResourcesHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddListResourcesFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the read resource handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseReadResourceFilter(this IMcpServerBuilder builder, Func<ReadResourceHandler, ReadResourceHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddReadResourceFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the complete handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseCompleteFilter(this IMcpServerBuilder builder, Func<CompleteHandler, CompleteHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddCompleteFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the subscribe to resources handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseSubscribeToResourcesFilter(this IMcpServerBuilder builder, Func<SubscribeToResourcesHandler, SubscribeToResourcesHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddSubscribeToResourcesFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the unsubscribe from resources handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseUnsubscribeFromResourcesFilter(this IMcpServerBuilder builder, Func<UnsubscribeFromResourcesHandler, UnsubscribeFromResourcesHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddUnsubscribeFromResourcesFilter(filter));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a filter to the set logging level handler pipeline.
+    /// </summary>
+    /// <param name="builder">The builder instance.</param>
+    /// <param name="filter">The filter function that wraps the handler.</param>
+    /// <returns>The builder provided in <paramref name="builder"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
+    /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
+    /// </remarks>
+    public static IMcpServerBuilder UseSetLoggingLevelFilter(this IMcpServerBuilder builder, Func<SetLoggingLevelHandler, SetLoggingLevelHandler> filter)
+    {
+        Throw.IfNull(builder);
+
+        builder.Services.Configure<McpServerHandlers>(s => s.AddSetLoggingLevelFilter(filter));
+        return builder;
+    }
+    #endregion
+
     #region Transports
     /// <summary>
     /// Adds a server transport that uses standard input (stdin) and standard output (stdout) for communication.

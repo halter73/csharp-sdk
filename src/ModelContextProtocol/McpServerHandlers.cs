@@ -3,6 +3,63 @@ using ModelContextProtocol.Protocol;
 
 namespace ModelContextProtocol.Server;
 
+#region Handler Delegate Types
+/// <summary>
+/// Delegate type for list resource templates handlers.
+/// </summary>
+public delegate ValueTask<ListResourceTemplatesResult> ListResourceTemplatesHandler(RequestContext<ListResourceTemplatesRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for list tools handlers.
+/// </summary>
+public delegate ValueTask<ListToolsResult> ListToolsHandler(RequestContext<ListToolsRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for call tool handlers.
+/// </summary>
+public delegate ValueTask<CallToolResult> CallToolHandler(RequestContext<CallToolRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for list prompts handlers.
+/// </summary>
+public delegate ValueTask<ListPromptsResult> ListPromptsHandler(RequestContext<ListPromptsRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for get prompt handlers.
+/// </summary>
+public delegate ValueTask<GetPromptResult> GetPromptHandler(RequestContext<GetPromptRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for list resources handlers.
+/// </summary>
+public delegate ValueTask<ListResourcesResult> ListResourcesHandler(RequestContext<ListResourcesRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for read resource handlers.
+/// </summary>
+public delegate ValueTask<ReadResourceResult> ReadResourceHandler(RequestContext<ReadResourceRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for complete handlers.
+/// </summary>
+public delegate ValueTask<CompleteResult> CompleteHandler(RequestContext<CompleteRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for subscribe to resources handlers.
+/// </summary>
+public delegate ValueTask<EmptyResult> SubscribeToResourcesHandler(RequestContext<SubscribeRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for unsubscribe from resources handlers.
+/// </summary>
+public delegate ValueTask<EmptyResult> UnsubscribeFromResourcesHandler(RequestContext<UnsubscribeRequestParams> context, CancellationToken cancellationToken);
+
+/// <summary>
+/// Delegate type for set logging level handlers.
+/// </summary>
+public delegate ValueTask<EmptyResult> SetLoggingLevelHandler(RequestContext<SetLevelRequestParams> context, CancellationToken cancellationToken);
+#endregion
+
 /// <summary>
 /// Provides a container for handlers used in the creation of an MCP server.
 /// </summary>
@@ -162,6 +219,170 @@ public sealed class McpServerHandlers
     /// </remarks>
     public Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>? SetLoggingLevelHandler { get; set; }
 
+    #region Filter Collections
+    private readonly List<Func<ListResourceTemplatesHandler, ListResourceTemplatesHandler>> _listResourceTemplatesFilters = new();
+    private readonly List<Func<ListToolsHandler, ListToolsHandler>> _listToolsFilters = new();
+    private readonly List<Func<CallToolHandler, CallToolHandler>> _callToolFilters = new();
+    private readonly List<Func<ListPromptsHandler, ListPromptsHandler>> _listPromptsFilters = new();
+    private readonly List<Func<GetPromptHandler, GetPromptHandler>> _getPromptFilters = new();
+    private readonly List<Func<ListResourcesHandler, ListResourcesHandler>> _listResourcesFilters = new();
+    private readonly List<Func<ReadResourceHandler, ReadResourceHandler>> _readResourceFilters = new();
+    private readonly List<Func<CompleteHandler, CompleteHandler>> _completeFilters = new();
+    private readonly List<Func<SubscribeToResourcesHandler, SubscribeToResourcesHandler>> _subscribeToResourcesFilters = new();
+    private readonly List<Func<UnsubscribeFromResourcesHandler, UnsubscribeFromResourcesHandler>> _unsubscribeFromResourcesFilters = new();
+    private readonly List<Func<SetLoggingLevelHandler, SetLoggingLevelHandler>> _setLoggingLevelFilters = new();
+    #endregion
+
+    #region Filter Registration Methods
+    /// <summary>
+    /// Adds a filter to the list resource templates handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddListResourceTemplatesFilter(Func<ListResourceTemplatesHandler, ListResourceTemplatesHandler> filter)
+    {
+        _listResourceTemplatesFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the list tools handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddListToolsFilter(Func<ListToolsHandler, ListToolsHandler> filter)
+    {
+        _listToolsFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the call tool handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddCallToolFilter(Func<CallToolHandler, CallToolHandler> filter)
+    {
+        _callToolFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the list prompts handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddListPromptsFilter(Func<ListPromptsHandler, ListPromptsHandler> filter)
+    {
+        _listPromptsFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the get prompt handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddGetPromptFilter(Func<GetPromptHandler, GetPromptHandler> filter)
+    {
+        _getPromptFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the list resources handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddListResourcesFilter(Func<ListResourcesHandler, ListResourcesHandler> filter)
+    {
+        _listResourcesFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the read resource handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddReadResourceFilter(Func<ReadResourceHandler, ReadResourceHandler> filter)
+    {
+        _readResourceFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the complete handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddCompleteFilter(Func<CompleteHandler, CompleteHandler> filter)
+    {
+        _completeFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the subscribe to resources handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddSubscribeToResourcesFilter(Func<SubscribeToResourcesHandler, SubscribeToResourcesHandler> filter)
+    {
+        _subscribeToResourcesFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the unsubscribe from resources handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddUnsubscribeFromResourcesFilter(Func<UnsubscribeFromResourcesHandler, UnsubscribeFromResourcesHandler> filter)
+    {
+        _unsubscribeFromResourcesFilters.Add(filter);
+    }
+
+    /// <summary>
+    /// Adds a filter to the set logging level handler pipeline.
+    /// </summary>
+    /// <param name="filter">The filter to add.</param>
+    internal void AddSetLoggingLevelFilter(Func<SetLoggingLevelHandler, SetLoggingLevelHandler> filter)
+    {
+        _setLoggingLevelFilters.Add(filter);
+    }
+    #endregion
+
+    #region Helper Methods for Building Filter Pipelines
+    /// <summary>
+    /// Builds a filter pipeline from a list of filters, applying them in reverse order so the last filter is outermost.
+    /// </summary>
+    /// <typeparam name="THandler">The handler delegate type.</typeparam>
+    /// <param name="baseHandler">The base handler to wrap with filters.</param>
+    /// <param name="filters">The list of filters to apply.</param>
+    /// <returns>The wrapped handler with all filters applied.</returns>
+    private static THandler BuildFilterPipeline<THandler>(THandler baseHandler, List<Func<THandler, THandler>> filters)
+        where THandler : Delegate
+    {
+        // Apply filters in reverse order so the last added filter is the outermost (first to execute)
+        THandler current = baseHandler;
+        for (int i = filters.Count - 1; i >= 0; i--)
+        {
+            current = filters[i](current);
+        }
+        return current;
+    }
+
+    /// <summary>
+    /// Wraps the existing handler (if any) with the filter pipeline and returns the result.
+    /// </summary>
+    /// <typeparam name="THandler">The handler delegate type.</typeparam>
+    /// <typeparam name="TRequest">The request type.</typeparam>
+    /// <typeparam name="TResult">The result type.</typeparam>
+    /// <param name="existingHandler">The existing handler from options (may be null).</param>
+    /// <param name="newHandler">The new handler from this instance (may be null).</param>
+    /// <param name="filters">The list of filters to apply.</param>
+    /// <returns>The final handler with filters applied, or null if no handlers are available.</returns>
+    private static Func<TRequest, CancellationToken, ValueTask<TResult>>? WrapHandlerWithFilters<THandler, TRequest, TResult>(
+        Func<TRequest, CancellationToken, ValueTask<TResult>>? existingHandler,
+        Func<TRequest, CancellationToken, ValueTask<TResult>>? newHandler,
+        List<Func<THandler, THandler>> filters)
+        where THandler : Delegate
+    {
+        var baseHandler = newHandler ?? existingHandler;
+        if (baseHandler is null || filters.Count == 0)
+        {
+            return baseHandler;
+        }
+
+        // Convert to delegate type and build pipeline
+        var typedHandler = (THandler)(Delegate)baseHandler;
+        var wrappedHandler = BuildFilterPipeline(typedHandler, filters);
+        return (Func<TRequest, CancellationToken, ValueTask<TResult>>)(Delegate)wrappedHandler;
+    }
+    #endregion
+
     /// <summary>
     /// Overwrite any handlers in McpServerOptions with non-null handlers from this instance.
     /// </summary>
@@ -170,50 +391,66 @@ public sealed class McpServerHandlers
     internal void OverwriteWithSetHandlers(McpServerOptions options)
     {
         PromptsCapability? promptsCapability = options.Capabilities?.Prompts;
-        if (ListPromptsHandler is not null || GetPromptHandler is not null)
+        if (ListPromptsHandler is not null || GetPromptHandler is not null || _listPromptsFilters.Count > 0 || _getPromptFilters.Count > 0)
         {
             promptsCapability ??= new();
-            promptsCapability.ListPromptsHandler = ListPromptsHandler ?? promptsCapability.ListPromptsHandler;
-            promptsCapability.GetPromptHandler = GetPromptHandler ?? promptsCapability.GetPromptHandler;
+            promptsCapability.ListPromptsHandler = WrapHandlerWithFilters<ListPromptsHandler, RequestContext<ListPromptsRequestParams>, ListPromptsResult>(
+                promptsCapability.ListPromptsHandler, ListPromptsHandler, _listPromptsFilters);
+            promptsCapability.GetPromptHandler = WrapHandlerWithFilters<GetPromptHandler, RequestContext<GetPromptRequestParams>, GetPromptResult>(
+                promptsCapability.GetPromptHandler, GetPromptHandler, _getPromptFilters);
         }
 
         ResourcesCapability? resourcesCapability = options.Capabilities?.Resources;
         if (ListResourcesHandler is not null ||
-            ReadResourceHandler is not null)
+            ReadResourceHandler is not null ||
+            ListResourceTemplatesHandler is not null ||
+            _listResourcesFilters.Count > 0 ||
+            _readResourceFilters.Count > 0 ||
+            _listResourceTemplatesFilters.Count > 0)
         {
             resourcesCapability ??= new();
-            resourcesCapability.ListResourceTemplatesHandler = ListResourceTemplatesHandler ?? resourcesCapability.ListResourceTemplatesHandler;
-            resourcesCapability.ListResourcesHandler = ListResourcesHandler ?? resourcesCapability.ListResourcesHandler;
-            resourcesCapability.ReadResourceHandler = ReadResourceHandler ?? resourcesCapability.ReadResourceHandler;
+            resourcesCapability.ListResourceTemplatesHandler = WrapHandlerWithFilters<ListResourceTemplatesHandler, RequestContext<ListResourceTemplatesRequestParams>, ListResourceTemplatesResult>(
+                resourcesCapability.ListResourceTemplatesHandler, ListResourceTemplatesHandler, _listResourceTemplatesFilters);
+            resourcesCapability.ListResourcesHandler = WrapHandlerWithFilters<ListResourcesHandler, RequestContext<ListResourcesRequestParams>, ListResourcesResult>(
+                resourcesCapability.ListResourcesHandler, ListResourcesHandler, _listResourcesFilters);
+            resourcesCapability.ReadResourceHandler = WrapHandlerWithFilters<ReadResourceHandler, RequestContext<ReadResourceRequestParams>, ReadResourceResult>(
+                resourcesCapability.ReadResourceHandler, ReadResourceHandler, _readResourceFilters);
 
-            if (SubscribeToResourcesHandler is not null || UnsubscribeFromResourcesHandler is not null)
+            if (SubscribeToResourcesHandler is not null || UnsubscribeFromResourcesHandler is not null ||
+                _subscribeToResourcesFilters.Count > 0 || _unsubscribeFromResourcesFilters.Count > 0)
             {
-                resourcesCapability.SubscribeToResourcesHandler = SubscribeToResourcesHandler ?? resourcesCapability.SubscribeToResourcesHandler;
-                resourcesCapability.UnsubscribeFromResourcesHandler = UnsubscribeFromResourcesHandler ?? resourcesCapability.UnsubscribeFromResourcesHandler;
+                resourcesCapability.SubscribeToResourcesHandler = WrapHandlerWithFilters<SubscribeToResourcesHandler, RequestContext<SubscribeRequestParams>, EmptyResult>(
+                    resourcesCapability.SubscribeToResourcesHandler, SubscribeToResourcesHandler, _subscribeToResourcesFilters);
+                resourcesCapability.UnsubscribeFromResourcesHandler = WrapHandlerWithFilters<UnsubscribeFromResourcesHandler, RequestContext<UnsubscribeRequestParams>, EmptyResult>(
+                    resourcesCapability.UnsubscribeFromResourcesHandler, UnsubscribeFromResourcesHandler, _unsubscribeFromResourcesFilters);
                 resourcesCapability.Subscribe = true;
             }
         }
 
         ToolsCapability? toolsCapability = options.Capabilities?.Tools;
-        if (ListToolsHandler is not null || CallToolHandler is not null)
+        if (ListToolsHandler is not null || CallToolHandler is not null || _listToolsFilters.Count > 0 || _callToolFilters.Count > 0)
         {
             toolsCapability ??= new();
-            toolsCapability.ListToolsHandler = ListToolsHandler ?? toolsCapability.ListToolsHandler;
-            toolsCapability.CallToolHandler = CallToolHandler ?? toolsCapability.CallToolHandler;
+            toolsCapability.ListToolsHandler = WrapHandlerWithFilters<ListToolsHandler, RequestContext<ListToolsRequestParams>, ListToolsResult>(
+                toolsCapability.ListToolsHandler, ListToolsHandler, _listToolsFilters);
+            toolsCapability.CallToolHandler = WrapHandlerWithFilters<CallToolHandler, RequestContext<CallToolRequestParams>, CallToolResult>(
+                toolsCapability.CallToolHandler, CallToolHandler, _callToolFilters);
         }
 
         LoggingCapability? loggingCapability = options.Capabilities?.Logging;
-        if (SetLoggingLevelHandler is not null)
+        if (SetLoggingLevelHandler is not null || _setLoggingLevelFilters.Count > 0)
         {
             loggingCapability ??= new();
-            loggingCapability.SetLoggingLevelHandler = SetLoggingLevelHandler;
+            loggingCapability.SetLoggingLevelHandler = WrapHandlerWithFilters<SetLoggingLevelHandler, RequestContext<SetLevelRequestParams>, EmptyResult>(
+                loggingCapability.SetLoggingLevelHandler, SetLoggingLevelHandler, _setLoggingLevelFilters);
         }
 
         CompletionsCapability? completionsCapability = options.Capabilities?.Completions;
-        if (CompleteHandler is not null)
+        if (CompleteHandler is not null || _completeFilters.Count > 0)
         {
             completionsCapability ??= new();
-            completionsCapability.CompleteHandler = CompleteHandler;
+            completionsCapability.CompleteHandler = WrapHandlerWithFilters<CompleteHandler, RequestContext<CompleteRequestParams>, CompleteResult>(
+                completionsCapability.CompleteHandler, CompleteHandler, _completeFilters);
         }
 
         options.Capabilities ??= new();
