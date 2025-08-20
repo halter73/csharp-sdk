@@ -233,13 +233,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var listChanged = resourcesCapability.ListChanged;
         var subscribe = resourcesCapability.Subscribe;
 
-        // Apply filters to the handlers
-        listResourcesHandler = BuildFilterPipeline(listResourcesHandler, options.Filters.ListResourcesFilters);
-        listResourceTemplatesHandler = BuildFilterPipeline(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters);
-        readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters);
-        subscribeHandler = BuildFilterPipeline(subscribeHandler, options.Filters.SubscribeToResourcesFilters);
-        unsubscribeHandler = BuildFilterPipeline(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters);
-
         // Handle resources provided via DI.
         if (resources is { IsEmpty: false })
         {
@@ -322,6 +315,12 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             // subscribe = true;
         }
 
+        listResourcesHandler = BuildFilterPipeline(listResourcesHandler, options.Filters.ListResourcesFilters);
+        listResourceTemplatesHandler = BuildFilterPipeline(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters);
+        readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters);
+        subscribeHandler = BuildFilterPipeline(subscribeHandler, options.Filters.SubscribeToResourcesFilters);
+        unsubscribeHandler = BuildFilterPipeline(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters);
+
         ServerCapabilities.Resources.ListResourcesHandler = listResourcesHandler;
         ServerCapabilities.Resources.ListResourceTemplatesHandler = listResourceTemplatesHandler;
         ServerCapabilities.Resources.ReadResourceHandler = readResourceHandler;
@@ -376,10 +375,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var prompts = promptsCapability.PromptCollection;
         var listChanged = promptsCapability.ListChanged;
 
-        // Apply filters to the handlers
-        listPromptsHandler = BuildFilterPipeline(listPromptsHandler, options.Filters.ListPromptsFilters);
-        getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters);
-
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (prompts is { IsEmpty: false })
         {
@@ -416,6 +411,9 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             listChanged = true;
         }
 
+        listPromptsHandler = BuildFilterPipeline(listPromptsHandler, options.Filters.ListPromptsFilters);
+        getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters);
+
         ServerCapabilities.Prompts.ListPromptsHandler = listPromptsHandler;
         ServerCapabilities.Prompts.GetPromptHandler = getPromptHandler;
         ServerCapabilities.Prompts.PromptCollection = prompts;
@@ -447,9 +445,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var callToolHandler = toolsCapability.CallToolHandler ?? (static async (request, _) => throw new McpException($"Unknown tool: '{request.Params?.Name}'", McpErrorCode.InvalidParams));
         var tools = toolsCapability.ToolCollection;
         var listChanged = toolsCapability.ListChanged;
-
-        listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.ListToolsFilters);
-        callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters);
 
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (tools is { IsEmpty: false })
@@ -486,6 +481,9 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
 
             listChanged = true;
         }
+
+        listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.ListToolsFilters);
+        callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters);
 
         ServerCapabilities.Tools.ListToolsHandler = listToolsHandler;
         ServerCapabilities.Tools.CallToolHandler = callToolHandler;
@@ -596,7 +594,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
     }
 
     private static THandler BuildFilterPipeline<THandler>(THandler baseHandler, List<Func<THandler, THandler>> filters)
-        where THandler : Delegate
     {
         // Apply filters in reverse order so the last added filter is the outermost (first to execute)
         THandler current = baseHandler;
