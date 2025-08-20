@@ -723,7 +723,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddListResourceTemplatesFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.ListResourceTemplatesFilters.Add(filter));
         return builder;
     }
 
@@ -742,7 +742,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddListToolsFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.ListToolsFilters.Add(filter));
         return builder;
     }
 
@@ -761,7 +761,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddCallToolFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.CallToolFilters.Add(filter));
         return builder;
     }
 
@@ -780,7 +780,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddListPromptsFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.ListPromptsFilters.Add(filter));
         return builder;
     }
 
@@ -799,7 +799,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddGetPromptFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.GetPromptFilters.Add(filter));
         return builder;
     }
 
@@ -818,7 +818,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddListResourcesFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.ListResourcesFilters.Add(filter));
         return builder;
     }
 
@@ -837,7 +837,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddReadResourceFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.ReadResourceFilters.Add(filter));
         return builder;
     }
 
@@ -856,7 +856,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddCompleteFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.CompleteFilters.Add(filter));
         return builder;
     }
 
@@ -875,7 +875,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddSubscribeToResourcesFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.SubscribeToResourcesFilters.Add(filter));
         return builder;
     }
 
@@ -894,7 +894,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddUnsubscribeFromResourcesFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.UnsubscribeFromResourcesFilters.Add(filter));
         return builder;
     }
 
@@ -913,7 +913,7 @@ public static partial class McpServerBuilderExtensions
     {
         Throw.IfNull(builder);
 
-        builder.Services.Configure<McpServerHandlers>(s => s.AddSetLoggingLevelFilter(filter));
+        builder.Services.Configure<McpServerOptions>(options => options.Filters.SetLoggingLevelFilters.Add(filter));
         return builder;
     }
     #endregion

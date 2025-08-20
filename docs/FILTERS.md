@@ -1,10 +1,27 @@
 # MCP Server Handler Filters
 
-This document describes the new filter functionality added to the MCP Server, which allows you to add middleware-style filters to handler pipelines.
+This document describes the filter functionality in the MCP Server, which allows you to add middleware-style filters to handler pipelines.
 
 ## Overview
 
-For each handler type in `McpServerHandlers.cs` that has a corresponding `WithXXXHandler` method in `McpServerBuilderExtensions.cs`, there is now a corresponding `UseXXXFilter` method that allows you to add filters to the handler pipeline.
+For each handler type in the MCP Server, there are corresponding `UseXXXFilter` methods in `McpServerBuilderExtensions.cs` that allow you to add filters to the handler pipeline. The filters are stored in `McpServerOptions.Filters` and applied during server configuration.
+
+## Filter Architecture
+
+### Filter Storage
+Filters are now stored in the `McpServerOptions.Filters` property, which is of type `McpServerFilters`. This class contains public collections for each handler type:
+
+```csharp
+public sealed class McpServerFilters
+{
+    public List<Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>>> ListToolsFilters { get; }
+    public List<Func<Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>, Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>>> CallToolFilters { get; }
+    // ... and so on for each handler type
+}
+```
+
+### Filter Application
+Filters are applied in the `McpServer` configuration methods (`ConfigureTools`, `ConfigureResources`, `ConfigurePrompts`, etc.) rather than in `McpServerHandlers`. This provides better separation of concerns and makes the filter pipeline more explicit.
 
 ## Available Filter Methods
 
@@ -71,6 +88,22 @@ services.AddMcpServer()
 
 Execution flow: `filter3 -> filter2 -> filter1 -> baseHandler -> filter1 -> filter2 -> filter3`
 
+## Implementation Details
+
+### Filter Pipeline Construction
+- Filters are applied in reverse order, so the last filter added is the outermost (first to execute)
+- The filter pipeline is built during server configuration in the respective `Configure` methods:
+  - `ConfigureTools` - applies tool-related filters
+  - `ConfigureResources` - applies resource-related filters  
+  - `ConfigurePrompts` - applies prompt-related filters
+  - `ConfigureCompletion` - applies completion filters
+  - `ConfigureLogging` - applies logging filters
+
+### Helper Methods
+The `McpServerFilters` class provides static helper methods for building filter pipelines:
+- `BuildFilterPipeline<THandler>` - Builds a filter pipeline from a list of filters
+- `WrapHandlerWithFilters<TRequest, TResult>` - Wraps a handler with filters
+
 This allows for middleware-style composition where outer filters can perform actions before and after inner filters and the base handler.
 
 ## Common Use Cases
@@ -131,12 +164,17 @@ This allows for middleware-style composition where outer filters can perform act
 });
 ```
 
-## Implementation Details
+## Migration Notes
 
-- Filters are stored in private `List<Func<THandler, THandler>>` fields in `McpServerHandlers`
-- The filter pipeline is built when `OverwriteWithSetHandlers` is called
-- Filters are applied even if no base handler is set, but the capability won't be created without a base handler
-- The filter system is fully type-safe and uses the same delegate types as the handlers
+### Breaking Changes
+- The `McpServerHandlers.OverwriteWithSetHandlers` method has been removed
+- Filter registration has been moved from `McpServerHandlers` to `McpServerOptions.Filters`
+- Filter pipeline construction now happens in `McpServer.Configure*` methods instead of `McpServerHandlers`
+
+### Code Changes Required
+If you were previously accessing filter collections directly (which was an internal API), you should now:
+1. Use the extension methods like `UseListToolsFilter()` instead of accessing internal filter collections
+2. Access filters through `options.Filters.ListToolsFilters` instead of through `McpServerHandlers`
 
 ## Example
 

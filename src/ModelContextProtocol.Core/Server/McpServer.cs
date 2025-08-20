@@ -195,9 +195,17 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             return;
         }
 
+        var completeHandler = completionsCapability.CompleteHandler ?? (static async (_, __) => new CompleteResult());
+        
+        // Apply filters to the handler
+        if (options.Filters.CompleteFilters.Count > 0)
+        {
+            completeHandler = McpServerFilters.WrapHandlerWithFilters(completeHandler, options.Filters.CompleteFilters) ?? completeHandler;
+        }
+
         ServerCapabilities.Completions = new()
         {
-            CompleteHandler = completionsCapability.CompleteHandler ?? (static async (_, __) => new CompleteResult())
+            CompleteHandler = completeHandler
         };
 
         SetHandler(
@@ -229,6 +237,32 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var resources = resourcesCapability.ResourceCollection;
         var listChanged = resourcesCapability.ListChanged;
         var subscribe = resourcesCapability.Subscribe;
+
+        // Apply filters to the handlers
+        if (options.Filters.ListResourcesFilters.Count > 0)
+        {
+            listResourcesHandler = McpServerFilters.WrapHandlerWithFilters(listResourcesHandler, options.Filters.ListResourcesFilters) ?? listResourcesHandler;
+        }
+        
+        if (options.Filters.ListResourceTemplatesFilters.Count > 0)
+        {
+            listResourceTemplatesHandler = McpServerFilters.WrapHandlerWithFilters(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters) ?? listResourceTemplatesHandler;
+        }
+        
+        if (options.Filters.ReadResourceFilters.Count > 0)
+        {
+            readResourceHandler = McpServerFilters.WrapHandlerWithFilters(readResourceHandler, options.Filters.ReadResourceFilters) ?? readResourceHandler;
+        }
+        
+        if (options.Filters.SubscribeToResourcesFilters.Count > 0)
+        {
+            subscribeHandler = McpServerFilters.WrapHandlerWithFilters(subscribeHandler, options.Filters.SubscribeToResourcesFilters) ?? subscribeHandler;
+        }
+        
+        if (options.Filters.UnsubscribeFromResourcesFilters.Count > 0)
+        {
+            unsubscribeHandler = McpServerFilters.WrapHandlerWithFilters(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters) ?? unsubscribeHandler;
+        }
 
         // Handle resources provided via DI.
         if (resources is { IsEmpty: false })
@@ -366,6 +400,17 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var prompts = promptsCapability.PromptCollection;
         var listChanged = promptsCapability.ListChanged;
 
+        // Apply filters to the handlers
+        if (options.Filters.ListPromptsFilters.Count > 0)
+        {
+            listPromptsHandler = McpServerFilters.WrapHandlerWithFilters(listPromptsHandler, options.Filters.ListPromptsFilters) ?? listPromptsHandler;
+        }
+        
+        if (options.Filters.GetPromptFilters.Count > 0)
+        {
+            getPromptHandler = McpServerFilters.WrapHandlerWithFilters(getPromptHandler, options.Filters.GetPromptFilters) ?? getPromptHandler;
+        }
+
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (prompts is { IsEmpty: false })
         {
@@ -434,6 +479,17 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var tools = toolsCapability.ToolCollection;
         var listChanged = toolsCapability.ListChanged;
 
+        // Apply filters to the handlers
+        if (options.Filters.ListToolsFilters.Count > 0)
+        {
+            listToolsHandler = McpServerFilters.WrapHandlerWithFilters(listToolsHandler, options.Filters.ListToolsFilters) ?? listToolsHandler;
+        }
+        
+        if (options.Filters.CallToolFilters.Count > 0)
+        {
+            callToolHandler = McpServerFilters.WrapHandlerWithFilters(callToolHandler, options.Filters.CallToolFilters) ?? callToolHandler;
+        }
+
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (tools is { IsEmpty: false })
         {
@@ -492,6 +548,12 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
     {
         // We don't require that the handler be provided, as we always store the provided log level to the server.
         var setLoggingLevelHandler = options.Capabilities?.Logging?.SetLoggingLevelHandler;
+        
+        // Apply filters to the handler
+        if (setLoggingLevelHandler is not null && options.Filters.SetLoggingLevelFilters.Count > 0)
+        {
+            setLoggingLevelHandler = McpServerFilters.WrapHandlerWithFilters(setLoggingLevelHandler, options.Filters.SetLoggingLevelFilters);
+        }
 
         ServerCapabilities.Logging = new();
         ServerCapabilities.Logging.SetLoggingLevelHandler = setLoggingLevelHandler;
