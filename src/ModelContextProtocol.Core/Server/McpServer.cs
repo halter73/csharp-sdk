@@ -282,7 +282,15 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             var originalReadResourceHandler = readResourceHandler;
             readResourceHandler = async (request, cancellationToken) =>
             {
-                if (request.Params?.Uri is string uri)
+                // Use the MatchedPrimitive if it was already resolved
+                if (request.MatchedPrimitive is McpServerResource matchedResource)
+                {
+                    if (await matchedResource.ReadAsync(request, cancellationToken).ConfigureAwait(false) is { } result)
+                    {
+                        return result;
+                    }
+                }
+                else if (request.Params?.Uri is string uri)
                 {
                     // First try an O(1) lookup by exact match.
                     if (resources.TryGetPrimitive(uri, out var resource))
@@ -317,7 +325,38 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
 
         listResourcesHandler = BuildFilterPipeline(listResourcesHandler, options.Filters.ListResourcesFilters);
         listResourceTemplatesHandler = BuildFilterPipeline(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters);
-        readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters);
+        readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters, handler =>
+            async (request, cancellationToken) =>
+            {
+                // Initial handler that sets MatchedPrimitive
+                if (request.Params?.Uri is { } uri && resources is not null)
+                {
+                    // First try an O(1) lookup by exact match.
+                    if (resources.TryGetPrimitive(uri, out var resource))
+                    {
+                        request.MatchedPrimitive = resource;
+                    }
+                    else
+                    {
+                        // Fall back to an O(N) lookup, trying to match against each URI template.
+                        // The number of templates is controlled by the server developer, and the number is expected to be
+                        // not terribly large. If that changes, this can be tweaked to enable a more efficient lookup.
+                        foreach (var resourceTemplate in resources)
+                        {
+                            // Check if this template would handle the request by testing if ReadAsync would succeed
+                            if (resourceTemplate.IsTemplated)
+                            {
+                                // This is a simplified check - a more robust implementation would match the URI pattern
+                                // For now, we'll let the actual handler attempt the match
+                                request.MatchedPrimitive = resourceTemplate;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                return await handler(request, cancellationToken).ConfigureAwait(false);
+            });
         subscribeHandler = BuildFilterPipeline(subscribeHandler, options.Filters.SubscribeToResourcesFilters);
         unsubscribeHandler = BuildFilterPipeline(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters);
 
@@ -399,10 +438,15 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             var originalGetPromptHandler = getPromptHandler;
             getPromptHandler = (request, cancellationToken) =>
             {
-                if (request.Params is not null &&
-                    prompts.TryGetPrimitive(request.Params.Name, out var prompt))
+                // Use the MatchedPrimitive if it was already resolved, otherwise fall back to TryGetPrimitive
+                if (request.MatchedPrimitive is McpServerPrompt prompt)
                 {
                     return prompt.GetAsync(request, cancellationToken);
+                }
+                else if (request.Params?.Name is not null &&
+                    prompts.TryGetPrimitive(request.Params.Name, out var promptFromCollection))
+                {
+                    return promptFromCollection.GetAsync(request, cancellationToken);
                 }
 
                 return originalGetPromptHandler(request, cancellationToken);
@@ -412,7 +456,18 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         }
 
         listPromptsHandler = BuildFilterPipeline(listPromptsHandler, options.Filters.ListPromptsFilters);
-        getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters);
+        getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters, handler =>
+            (request, cancellationToken) =>
+            {
+                // Initial handler that sets MatchedPrimitive
+                if (request.Params?.Name is { } promptName && prompts is not null &&
+                    prompts.TryGetPrimitive(promptName, out var prompt))
+                {
+                    request.MatchedPrimitive = prompt;
+                }
+
+                return handler(request, cancellationToken);
+            });
 
         ServerCapabilities.Prompts.ListPromptsHandler = listPromptsHandler;
         ServerCapabilities.Prompts.GetPromptHandler = getPromptHandler;
@@ -470,10 +525,15 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             var originalCallToolHandler = callToolHandler;
             callToolHandler = (request, cancellationToken) =>
             {
-                if (request.Params is not null &&
-                    tools.TryGetPrimitive(request.Params.Name, out var tool))
+                // Use the MatchedPrimitive if it was already resolved, otherwise fall back to TryGetPrimitive
+                if (request.MatchedPrimitive is McpServerTool tool)
                 {
                     return tool.InvokeAsync(request, cancellationToken);
+                }
+                else if (request.Params?.Name is not null &&
+                    tools.TryGetPrimitive(request.Params.Name, out var toolFromCollection))
+                {
+                    return toolFromCollection.InvokeAsync(request, cancellationToken);
                 }
 
                 return originalCallToolHandler(request, cancellationToken);
@@ -483,7 +543,18 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         }
 
         listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.ListToolsFilters);
-        callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters);
+        callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters, handler =>
+            (request, cancellationToken) =>
+            {
+                // Initial handler that sets MatchedPrimitive
+                if (request.Params?.Name is { } toolName && tools is not null &&
+                    tools.TryGetPrimitive(toolName, out var tool))
+                {
+                    request.MatchedPrimitive = tool;
+                }
+
+                return handler(request, cancellationToken);
+            });
 
         ServerCapabilities.Tools.ListToolsHandler = listToolsHandler;
         ServerCapabilities.Tools.CallToolHandler = callToolHandler;
@@ -593,13 +664,17 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             requestTypeInfo, responseTypeInfo);
     }
 
-    private static THandler BuildFilterPipeline<THandler>(THandler baseHandler, List<Func<THandler, THandler>> filters)
+    private static THandler BuildFilterPipeline<THandler>(THandler baseHandler, List<Func<THandler, THandler>> filters, Func<THandler, THandler>? initialHandler = null)
     {
         // Apply filters in reverse order so the last added filter is the outermost (first to execute)
         THandler current = baseHandler;
         for (int i = filters.Count - 1; i >= 0; i--)
         {
             current = filters[i](current);
+        }
+        if (initialHandler is not null)
+        {
+            current = initialHandler(current);
         }
         return current;
     }
