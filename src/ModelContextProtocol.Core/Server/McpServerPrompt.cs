@@ -129,6 +129,15 @@ public abstract class McpServerPrompt : IMcpServerPrimitive
     public abstract Prompt ProtocolPrompt { get; }
 
     /// <summary>
+    /// Gets the metadata for this prompt instance.
+    /// </summary>
+    /// <remarks>
+    /// Contains attributes from the associated MethodInfo and declaring class (if any),
+    /// with class-level attributes appearing before method-level attributes.
+    /// </remarks>
+    public abstract IList<object> Metadata { get; }
+
+    /// <summary>
     /// Gets the prompt, rendering it with the provided request parameters and returning the prompt result.
     /// </summary>
     /// <param name="request">

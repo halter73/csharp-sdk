@@ -17,6 +17,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
 {
     private readonly Regex? _uriParser;
     private readonly string[] _templateVariableNames = [];
+    private readonly IList<object> _metadata;
 
     /// <summary>
     /// Creates an <see cref="AIFunctionMcpServerResource"/> instance for a method, specified via a <see cref="Delegate"/> instance.
@@ -46,7 +47,8 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
     }
 
     /// <summary>
@@ -68,7 +70,8 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
                 Debug.Assert(args.Services is RequestServiceProvider<ReadResourceRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<ReadResourceRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<ReadResourceRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -205,6 +208,12 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     /// <summary>Creates an <see cref="McpServerResource"/> that wraps the specified <see cref="AIFunction"/>.</summary>
     public static new AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options)
     {
+        return Create(function, options, []);
+    }
+
+    /// <summary>Creates an <see cref="McpServerResource"/> that wraps the specified <see cref="AIFunction"/>.</summary>
+    internal static AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options, IList<object> metadata)
+    {
         Throw.IfNull(function);
 
         string name = options?.Name ?? function.Name;
@@ -218,7 +227,24 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
             MimeType = options?.MimeType ?? "application/octet-stream",
         };
 
-        return new AIFunctionMcpServerResource(function, resource);
+        return new AIFunctionMcpServerResource(function, resource, metadata);
+    }
+
+    /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
+    private static IList<object> CreateMetadata(MethodInfo method)
+    {
+        List<object> metadata = [];
+        
+        // Add class-level attributes first
+        if (method.DeclaringType is not null)
+        {
+            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
+        }
+        
+        // Add method-level attributes second
+        metadata.AddRange(method.GetCustomAttributes());
+        
+        return metadata.AsReadOnly();
     }
 
     private static McpServerResourceCreateOptions DeriveOptions(MemberInfo member, McpServerResourceCreateOptions? options)
@@ -270,11 +296,12 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerResource"/> class.</summary>
-    private AIFunctionMcpServerResource(AIFunction function, ResourceTemplate resourceTemplate)
+    private AIFunctionMcpServerResource(AIFunction function, ResourceTemplate resourceTemplate, IList<object> metadata)
     {
         AIFunction = function;
         ProtocolResourceTemplate = resourceTemplate;
         ProtocolResource = resourceTemplate.AsResource();
+        _metadata = metadata;
 
         if (ProtocolResource is null)
         {
@@ -288,6 +315,9 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
 
     /// <inheritdoc />
     public override Resource? ProtocolResource { get; }
+
+    /// <inheritdoc />
+    public override IList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<ReadResourceResult?> ReadAsync(

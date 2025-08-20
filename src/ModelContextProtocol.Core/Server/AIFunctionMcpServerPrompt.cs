@@ -11,6 +11,7 @@ namespace ModelContextProtocol.Server;
 /// <summary>Provides an <see cref="McpServerPrompt"/> that's implemented via an <see cref="AIFunction"/>.</summary>
 internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
 {
+    private readonly IList<object> _metadata;
     /// <summary>
     /// Creates an <see cref="McpServerPrompt"/> instance for a method, specified via a <see cref="Delegate"/> instance.
     /// </summary>
@@ -39,7 +40,8 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
     }
 
     /// <summary>
@@ -61,7 +63,8 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
                 Debug.Assert(args.Services is RequestServiceProvider<GetPromptRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<GetPromptRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<GetPromptRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options);
+            options,
+            CreateMetadata(method));
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -108,6 +111,12 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     /// <summary>Creates an <see cref="McpServerPrompt"/> that wraps the specified <see cref="AIFunction"/>.</summary>
     public static new AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options)
     {
+        return Create(function, options, []);
+    }
+
+    /// <summary>Creates an <see cref="McpServerPrompt"/> that wraps the specified <see cref="AIFunction"/>.</summary>
+    internal static AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options, IList<object> metadata)
+    {
         Throw.IfNull(function);
 
         List<PromptArgument> args = [];
@@ -136,7 +145,24 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
             Arguments = args,
         };
 
-        return new AIFunctionMcpServerPrompt(function, prompt);
+        return new AIFunctionMcpServerPrompt(function, prompt, metadata);
+    }
+
+    /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
+    private static IList<object> CreateMetadata(MethodInfo method)
+    {
+        List<object> metadata = [];
+        
+        // Add class-level attributes first
+        if (method.DeclaringType is not null)
+        {
+            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
+        }
+        
+        // Add method-level attributes second
+        metadata.AddRange(method.GetCustomAttributes());
+        
+        return metadata.AsReadOnly();
     }
 
     private static McpServerPromptCreateOptions DeriveOptions(MethodInfo method, McpServerPromptCreateOptions? options)
@@ -161,14 +187,18 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerPrompt"/> class.</summary>
-    private AIFunctionMcpServerPrompt(AIFunction function, Prompt prompt)
+    private AIFunctionMcpServerPrompt(AIFunction function, Prompt prompt, IList<object> metadata)
     {
         AIFunction = function;
         ProtocolPrompt = prompt;
+        _metadata = metadata;
     }
 
     /// <inheritdoc />
     public override Prompt ProtocolPrompt { get; }
+
+    /// <inheritdoc />
+    public override IList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<GetPromptResult> GetAsync(
