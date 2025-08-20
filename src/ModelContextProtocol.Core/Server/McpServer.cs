@@ -196,12 +196,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         }
 
         var completeHandler = completionsCapability.CompleteHandler ?? (static async (_, __) => new CompleteResult());
-
-        // Apply filters to the handler
-        if (options.Filters.CompleteFilters.Count > 0)
-        {
-            completeHandler = BuildFilterPipeline(completeHandler, options.Filters.CompleteFilters) ?? completeHandler;
-        }
+        completeHandler = BuildFilterPipeline(completeHandler, options.Filters.CompleteFilters);
 
         ServerCapabilities.Completions = new()
         {
@@ -239,30 +234,11 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var subscribe = resourcesCapability.Subscribe;
 
         // Apply filters to the handlers
-        if (options.Filters.ListResourcesFilters.Count > 0)
-        {
-            listResourcesHandler = BuildFilterPipeline(listResourcesHandler, options.Filters.ListResourcesFilters) ?? listResourcesHandler;
-        }
-
-        if (options.Filters.ListResourceTemplatesFilters.Count > 0)
-        {
-            listResourceTemplatesHandler = BuildFilterPipeline(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters) ?? listResourceTemplatesHandler;
-        }
-
-        if (options.Filters.ReadResourceFilters.Count > 0)
-        {
-            readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters) ?? readResourceHandler;
-        }
-
-        if (options.Filters.SubscribeToResourcesFilters.Count > 0)
-        {
-            subscribeHandler = BuildFilterPipeline(subscribeHandler, options.Filters.SubscribeToResourcesFilters) ?? subscribeHandler;
-        }
-
-        if (options.Filters.UnsubscribeFromResourcesFilters.Count > 0)
-        {
-            unsubscribeHandler = BuildFilterPipeline(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters) ?? unsubscribeHandler;
-        }
+        listResourcesHandler = BuildFilterPipeline(listResourcesHandler, options.Filters.ListResourcesFilters);
+        listResourceTemplatesHandler = BuildFilterPipeline(listResourceTemplatesHandler, options.Filters.ListResourceTemplatesFilters);
+        readResourceHandler = BuildFilterPipeline(readResourceHandler, options.Filters.ReadResourceFilters);
+        subscribeHandler = BuildFilterPipeline(subscribeHandler, options.Filters.SubscribeToResourcesFilters);
+        unsubscribeHandler = BuildFilterPipeline(unsubscribeHandler, options.Filters.UnsubscribeFromResourcesFilters);
 
         // Handle resources provided via DI.
         if (resources is { IsEmpty: false })
@@ -401,15 +377,8 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var listChanged = promptsCapability.ListChanged;
 
         // Apply filters to the handlers
-        if (options.Filters.ListPromptsFilters.Count > 0)
-        {
-            listPromptsHandler = BuildFilterPipeline(listPromptsHandler, options.Filters.ListPromptsFilters) ?? listPromptsHandler;
-        }
-
-        if (options.Filters.GetPromptFilters.Count > 0)
-        {
-            getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters) ?? getPromptHandler;
-        }
+        listPromptsHandler = BuildFilterPipeline(listPromptsHandler, options.Filters.ListPromptsFilters);
+        getPromptHandler = BuildFilterPipeline(getPromptHandler, options.Filters.GetPromptFilters);
 
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (prompts is { IsEmpty: false })
@@ -479,16 +448,8 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var tools = toolsCapability.ToolCollection;
         var listChanged = toolsCapability.ListChanged;
 
-        // Apply filters to the handlers
-        if (options.Filters.ListToolsFilters.Count > 0)
-        {
-            listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.ListToolsFilters) ?? listToolsHandler;
-        }
-
-        if (options.Filters.CallToolFilters.Count > 0)
-        {
-            callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters) ?? callToolHandler;
-        }
+        listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.ListToolsFilters);
+        callToolHandler = BuildFilterPipeline(callToolHandler, options.Filters.CallToolFilters);
 
         // Handle tools provided via DI by augmenting the handlers to incorporate them.
         if (tools is { IsEmpty: false })
@@ -550,7 +511,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         var setLoggingLevelHandler = options.Capabilities?.Logging?.SetLoggingLevelHandler;
 
         // Apply filters to the handler
-        if (setLoggingLevelHandler is not null && options.Filters.SetLoggingLevelFilters.Count > 0)
+        if (setLoggingLevelHandler is not null)
         {
             setLoggingLevelHandler = BuildFilterPipeline(setLoggingLevelHandler, options.Filters.SetLoggingLevelFilters);
         }
