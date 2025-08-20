@@ -290,28 +290,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
                         return result;
                     }
                 }
-                else if (request.Params?.Uri is string uri)
-                {
-                    // First try an O(1) lookup by exact match.
-                    if (resources.TryGetPrimitive(uri, out var resource))
-                    {
-                        if (await resource.ReadAsync(request, cancellationToken).ConfigureAwait(false) is { } result)
-                        {
-                            return result;
-                        }
-                    }
-
-                    // Fall back to an O(N) lookup, trying to match against each URI template.
-                    // The number of templates is controlled by the server developer, and the number is expected to be
-                    // not terribly large. If that changes, this can be tweaked to enable a more efficient lookup.
-                    foreach (var resourceTemplate in resources)
-                    {
-                        if (await resourceTemplate.ReadAsync(request, cancellationToken).ConfigureAwait(false) is { } result)
-                        {
-                            return result;
-                        }
-                    }
-                }
 
                 // Finally fall back to the handler.
                 return await originalReadResourceHandler(request, cancellationToken).ConfigureAwait(false);
@@ -443,11 +421,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
                 {
                     return prompt.GetAsync(request, cancellationToken);
                 }
-                else if (request.Params?.Name is not null &&
-                    prompts.TryGetPrimitive(request.Params.Name, out var promptFromCollection))
-                {
-                    return promptFromCollection.GetAsync(request, cancellationToken);
-                }
 
                 return originalGetPromptHandler(request, cancellationToken);
             };
@@ -529,11 +502,6 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
                 if (request.MatchedPrimitive is McpServerTool tool)
                 {
                     return tool.InvokeAsync(request, cancellationToken);
-                }
-                else if (request.Params?.Name is not null &&
-                    tools.TryGetPrimitive(request.Params.Name, out var toolFromCollection))
-                {
-                    return toolFromCollection.InvokeAsync(request, cancellationToken);
                 }
 
                 return originalCallToolHandler(request, cancellationToken);
