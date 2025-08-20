@@ -152,16 +152,16 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     private static IList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
-        
+
         // Add class-level attributes first
         if (method.DeclaringType is not null)
         {
             metadata.AddRange(method.DeclaringType.GetCustomAttributes());
         }
-        
+
         // Add method-level attributes second
         metadata.AddRange(method.GetCustomAttributes());
-        
+
         return metadata.AsReadOnly();
     }
 
@@ -191,6 +191,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     {
         AIFunction = function;
         ProtocolPrompt = prompt;
+        ProtocolPrompt.McpServerPrompt = this;
         _metadata = metadata;
     }
 

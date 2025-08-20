@@ -27,7 +27,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
         McpServerToolCreateOptions? options)
     {
         Throw.IfNull(method);
-        
+
         options = DeriveOptions(method.Method, options);
 
         return Create(method.Method, method.Target, options);
@@ -194,16 +194,16 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     private static IList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
-        
+
         // Add class-level attributes first
         if (method.DeclaringType is not null)
         {
             metadata.AddRange(method.DeclaringType.GetCustomAttributes());
         }
-        
+
         // Add method-level attributes second
         metadata.AddRange(method.GetCustomAttributes());
-        
+
         return metadata.AsReadOnly();
     }
 
@@ -255,6 +255,8 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     {
         AIFunction = function;
         ProtocolTool = tool;
+        ProtocolTool.McpServerTool = this;
+
         _logger = serviceProvider?.GetService<ILoggerFactory>()?.CreateLogger<McpServerTool>() ?? (ILogger)NullLogger.Instance;
         _structuredOutputRequiresWrapping = structuredOutputRequiresWrapping;
         _metadata = metadata;
@@ -319,27 +321,27 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
                 Content = [],
                 StructuredContent = structuredContent,
             },
-            
+
             string text => new()
             {
                 Content = [new TextContentBlock { Text = text }],
                 StructuredContent = structuredContent,
             },
-            
+
             ContentBlock content => new()
             {
                 Content = [content],
                 StructuredContent = structuredContent,
             },
-            
+
             IEnumerable<AIContent> contentItems => ConvertAIContentEnumerableToCallToolResult(contentItems, structuredContent),
-            
+
             IEnumerable<ContentBlock> contents => new()
             {
                 Content = [.. contents],
                 StructuredContent = structuredContent,
             },
-            
+
             CallToolResult callToolResponse => callToolResponse,
 
             _ => new()

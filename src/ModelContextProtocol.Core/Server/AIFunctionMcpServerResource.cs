@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -234,16 +235,16 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     private static IList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
-        
+
         // Add class-level attributes first
         if (method.DeclaringType is not null)
         {
             metadata.AddRange(method.DeclaringType.GetCustomAttributes());
         }
-        
+
         // Add method-level attributes second
         metadata.AddRange(method.GetCustomAttributes());
-        
+
         return metadata.AsReadOnly();
     }
 
@@ -300,6 +301,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     {
         AIFunction = function;
         ProtocolResourceTemplate = resourceTemplate;
+        ProtocolResourceTemplate.McpServerResource = this;
         ProtocolResource = resourceTemplate.AsResource();
         _metadata = metadata;
 
