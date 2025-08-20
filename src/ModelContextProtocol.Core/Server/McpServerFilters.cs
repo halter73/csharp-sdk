@@ -13,11 +13,6 @@ namespace ModelContextProtocol.Server;
 public sealed class McpServerFilters
 {
     /// <summary>
-    /// Gets the filters for the list resource templates handler pipeline.
-    /// </summary>
-    public List<Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>>> ListResourceTemplatesFilters { get; } = new();
-
-    /// <summary>
     /// Gets the filters for the list tools handler pipeline.
     /// </summary>
     public List<Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>>> ListToolsFilters { get; } = new();
@@ -36,6 +31,11 @@ public sealed class McpServerFilters
     /// Gets the filters for the get prompt handler pipeline.
     /// </summary>
     public List<Func<Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>, Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>>> GetPromptFilters { get; } = new();
+
+    /// <summary>
+    /// Gets the filters for the list resource templates handler pipeline.
+    /// </summary>
+    public List<Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>>> ListResourceTemplatesFilters { get; } = new();
 
     /// <summary>
     /// Gets the filters for the list resources handler pipeline.
@@ -66,32 +66,4 @@ public sealed class McpServerFilters
     /// Gets the filters for the set logging level handler pipeline.
     /// </summary>
     public List<Func<Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>>> SetLoggingLevelFilters { get; } = new();
-
-    /// <summary>
-    /// Wraps the existing handler (if any) with the filter pipeline and returns the result.
-    /// </summary>
-    /// <typeparam name="TRequest">The request type.</typeparam>
-    /// <typeparam name="TResult">The result type.</typeparam>
-    /// <param name="existingHandler">The existing handler from options (may be null).</param>
-    /// <param name="filters">The list of filters to apply.</param>
-    /// <returns>The final handler with filters applied, or null if no handlers are available.</returns>
-    internal static Func<TRequest, CancellationToken, ValueTask<TResult>>? WrapHandlerWithFilters<TRequest, TResult>(
-        Func<TRequest, CancellationToken, ValueTask<TResult>> existingHandler,
-        List<Func<Func<TRequest, CancellationToken, ValueTask<TResult>>, Func<TRequest, CancellationToken, ValueTask<TResult>>>> filters)
-    {
-        var wrappedHandler = BuildFilterPipeline(existingHandler, filters);
-        return wrappedHandler;
-    }
-
-    internal static THandler BuildFilterPipeline<THandler>(THandler baseHandler, List<Func<THandler, THandler>> filters)
-        where THandler : Delegate
-    {
-        // Apply filters in reverse order so the last added filter is the outermost (first to execute)
-        THandler current = baseHandler;
-        for (int i = filters.Count - 1; i >= 0; i--)
-        {
-            current = filters[i](current);
-        }
-        return current;
-    }
 }
