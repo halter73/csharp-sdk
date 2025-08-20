@@ -37,6 +37,11 @@ public sealed class RequestContext<TParams>
         }
     }
 
+    /// <summary>
+    /// Gets or sets the primitive that matched the request.
+    /// </summary>
+    public IMcpServerPrimitive? MatchedPrimitive { get; set; }
+
     /// <summary>Gets or sets the services associated with this request.</summary>
     /// <remarks>
     /// This may not be the same instance stored in <see cref="IMcpServer.Services"/>
