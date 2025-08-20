@@ -26,7 +26,7 @@ public class McpServerFilterTests
     public void UseListToolsFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<ListToolsHandler, ListToolsHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -47,7 +47,7 @@ public class McpServerFilterTests
     public void UseCallToolFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<CallToolHandler, CallToolHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>, Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -66,7 +66,7 @@ public class McpServerFilterTests
     public void UseListPromptsFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<ListPromptsHandler, ListPromptsHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>, Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -85,7 +85,7 @@ public class McpServerFilterTests
     public void UseGetPromptFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<GetPromptHandler, GetPromptHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>, Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -104,7 +104,7 @@ public class McpServerFilterTests
     public void UseListResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<ListResourcesHandler, ListResourcesHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>, Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -123,7 +123,7 @@ public class McpServerFilterTests
     public void UseReadResourceFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<ReadResourceHandler, ReadResourceHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>, Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -142,7 +142,7 @@ public class McpServerFilterTests
     public void UseCompleteFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<CompleteHandler, CompleteHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>, Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -161,7 +161,7 @@ public class McpServerFilterTests
     public void UseSubscribeToResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<SubscribeToResourcesHandler, SubscribeToResourcesHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -180,7 +180,7 @@ public class McpServerFilterTests
     public void UseUnsubscribeFromResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<UnsubscribeFromResourcesHandler, UnsubscribeFromResourcesHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -199,7 +199,7 @@ public class McpServerFilterTests
     public void UseSetLoggingLevelFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<SetLoggingLevelHandler, SetLoggingLevelHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
@@ -218,7 +218,7 @@ public class McpServerFilterTests
     public void UseListResourceTemplatesFilter_AddsFilterToHandlers()
     {
         // Arrange
-        Func<ListResourceTemplatesHandler, ListResourceTemplatesHandler> filter = next => (context, cancellationToken) =>
+        Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>> filter = next => (context, cancellationToken) =>
         {
             return next(context, cancellationToken);
         };
