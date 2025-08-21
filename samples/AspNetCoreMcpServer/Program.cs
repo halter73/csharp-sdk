@@ -3,8 +3,14 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using AspNetCoreMcpServer.Tools;
 using AspNetCoreMcpServer.Resources;
+using Microsoft.AspNetCore.Authorization;
+using ModelContextProtocol.Protocol;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add authorization services
+builder.Services.AddAuthorization();
+
 builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithTools<EchoTool>()
@@ -12,17 +18,128 @@ builder.Services.AddMcpServer()
     .WithResources<SimpleResourceType>()
     .UseListToolsFilter(next => async (context, cancellationToken) =>
     {
-        // Example filter that logs the list tools request
-        Console.WriteLine($"Listing tools with params: {context.Params}");
+        // Authorization filter for list tools
         var result = await next(context, cancellationToken);
-        Console.WriteLine($"Listed tools: {string.Join(", ", result.Tools.Select(t => t.McpServerTool?.Metadata))}");
-        return result;
+
+        // Filter out tools that the user is not authorized to see
+        var authorizedTools = new List<Tool>();
+        var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
+
+        if (policyProvider != null)
+        {
+            foreach (var tool in result.Tools)
+            {
+                if (tool.McpServerTool?.Metadata != null)
+                {
+                    var authorizeData = tool.McpServerTool.Metadata.OfType<IAuthorizeData>().ToArray();
+                    var allowAnonymous = tool.McpServerTool.Metadata.OfType<IAllowAnonymous>().Any();
+
+                    // If the tool has AllowAnonymous, include it
+                    if (allowAnonymous)
+                    {
+                        authorizedTools.Add(tool);
+                        continue;
+                    }
+
+                    // If the tool has authorization requirements, check them
+                    if (authorizeData.Length > 0)
+                    {
+                        try
+                        {
+                            var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
+                            if (policy != null)
+                            {
+                                // For now, we'll omit tools that require authorization since we don't have a way to get the current user context
+                                // In a real implementation, you'd get the current user from HttpContext or similar
+                                continue;
+                            }
+                        }
+                        catch
+                        {
+                            // If policy creation fails, exclude the tool
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // No authorization metadata, include the tool
+                        authorizedTools.Add(tool);
+                    }
+                }
+                else
+                {
+                    // No metadata, include the tool
+                    authorizedTools.Add(tool);
+                }
+            }
+        }
+        else
+        {
+            // No authorization provider, return all tools
+            authorizedTools.AddRange(result.Tools);
+        }
+
+        Console.WriteLine($"Authorization filter: Listed {authorizedTools.Count} of {result.Tools?.Count ?? 0} tools");
+        return new ListToolsResult { Tools = authorizedTools, NextCursor = result.NextCursor };
     })
-    .UseCallToolFilter(next => (context, cancellationToken) =>
+    .UseCallToolFilter(next => async (context, cancellationToken) =>
     {
-        // Example filter that logs the call
-        Console.WriteLine($"Calling tool '{context.MatchedPrimitive?.Id}' with params: {context.Params}");
-        return next(context, cancellationToken);
+        // Authorization filter for call tool
+        if (context.MatchedPrimitive?.Metadata != null)
+        {
+            var authorizeData = context.MatchedPrimitive.Metadata.OfType<IAuthorizeData>().ToArray();
+            var allowAnonymous = context.MatchedPrimitive.Metadata.OfType<IAllowAnonymous>().Any();
+
+            // If the tool allows anonymous access, proceed
+            if (allowAnonymous)
+            {
+                Console.WriteLine($"Tool '{context.Params?.Name}' allows anonymous access");
+                return await next(context, cancellationToken);
+            }
+
+            // If the tool has authorization requirements, check them
+            if (authorizeData.Length > 0)
+            {
+                var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
+                if (policyProvider != null)
+                {
+                    try
+                    {
+                        var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
+                        if (policy != null)
+                        {
+                            // For this example, we'll deny access to tools requiring authorization
+                            // In a real implementation, you'd evaluate the policy against the current user
+                            Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - authorization required");
+                            return new CallToolResult
+                            {
+                                Content = new[]
+                                {
+                                    new TextContentBlock { Text = "Access forbidden: This tool requires authorization." }
+                                },
+                                IsError = true
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Authorization error for tool '{context.Params?.Name}': {ex.Message}");
+                        return new CallToolResult
+                        {
+                            Content = new[]
+                            {
+                                new TextContentBlock { Text = "Access forbidden: Authorization error occurred." }
+                            },
+                            IsError = true
+                        };
+                    }
+                }
+            }
+        }
+
+        // No authorization metadata or no authorization provider, proceed with the call
+        Console.WriteLine($"Calling tool '{context.Params?.Name}' - no authorization restrictions");
+        return await next(context, cancellationToken);
     });
 
 builder.Services.AddOpenTelemetry()
