@@ -1,14 +1,12 @@
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using System.Net.Http.Headers;
 
 async Task TestWithAuth(string? token, string description)
 {
     Console.WriteLine($"\n=== {description} ===");
 
-    // Create an HTTP client to test the MCP server
     using var httpClient = new HttpClient();
-
-    // Add JWT token if provided
     if (!string.IsNullOrEmpty(token))
     {
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -19,17 +17,19 @@ async Task TestWithAuth(string? token, string description)
         Console.WriteLine("No authentication token (anonymous access)");
     }
 
-    // Test the MCP server running on localhost:3001
-    var transport = new SseClientTransport(new()
-    {
-        Endpoint = new Uri("http://localhost:3001"),
-    }, httpClient);
+    var transport = new SseClientTransport(new() { Endpoint = new Uri("http://localhost:3001") }, httpClient);
+
+    // Tool name constants must match the server's published names exactly
+    const string ToolEcho = "echo";                  // AllowAnonymous
+    const string ToolProtectedEcho = "protected_echo"; // [Authorize]
+    const string ToolAdminSampleLlm = "sampleLLM";   // [Authorize(Roles="Admin")]
+    const string ToolSimpleLlm = "simple_llm";       // AllowAnonymous
 
     try
     {
         await using var mcpClient = await McpClientFactory.CreateAsync(transport);
 
-        // Test listing tools - should show authorization filtering
+        // 1. List tools
         Console.WriteLine("\n1. Testing List Tools (should show authorization filtering):");
         try
         {
@@ -40,108 +40,68 @@ async Task TestWithAuth(string? token, string description)
                 Console.WriteLine($"  - {tool.Name}: {tool.Description}");
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error listing tools: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Error listing tools: {ex.Message}"); }
 
-        // Test calling an anonymous tool (Echo)
-        Console.WriteLine("\n2. Testing Anonymous Tool (Echo):");
+        // 2. Anonymous echo
+        Console.WriteLine("\n2. Testing Anonymous Tool (echo):");
         try
         {
-            var result = await mcpClient.CallToolAsync("Echo", new Dictionary<string, object?>
-            {
-                ["message"] = "test message"
-            });
-
-            if (result.IsError == true)
-            {
-                Console.WriteLine($"Error: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
-            else
-            {
-                Console.WriteLine($"Success: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
+            var result = await mcpClient.CallToolAsync(ToolEcho, new Dictionary<string, object?> { ["message"] = "test message" });
+            Console.WriteLine(result.IsError == true ? $"Error: {FormatContent(result.Content)}" : $"Success: {FormatContent(result.Content)}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error calling Echo: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Error calling echo: {ex.Message}"); }
 
-        // Test calling a protected tool (ProtectedEcho)
-        Console.WriteLine("\n3. Testing Protected Tool (ProtectedEcho):");
+        // 3. Protected echo
+        Console.WriteLine("\n3. Testing Protected Tool (protected_echo):");
         try
         {
-            var result = await mcpClient.CallToolAsync("ProtectedEcho", new Dictionary<string, object?>
-            {
-                ["message"] = "protected message"
-            });
-
-            if (result.IsError == true)
-            {
-                Console.WriteLine($"Error: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
-            else
-            {
-                Console.WriteLine($"Success: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
+            var result = await mcpClient.CallToolAsync(ToolProtectedEcho, new Dictionary<string, object?> { ["message"] = "protected message" });
+            Console.WriteLine(result.IsError == true ? $"Error: {FormatContent(result.Content)}" : $"Success: {FormatContent(result.Content)}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error calling ProtectedEcho: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Error calling protected_echo: {ex.Message}"); }
 
-        // Test calling an admin-only tool (sampleLLM)
+        // 4. Admin-only sample LLM
         Console.WriteLine("\n4. Testing Admin-Only Tool (sampleLLM):");
         try
         {
-            var result = await mcpClient.CallToolAsync("sampleLLM", new Dictionary<string, object?>
-            {
-                ["prompt"] = "test prompt",
-                ["maxTokens"] = 100
-            });
-
-            if (result.IsError == true)
-            {
-                Console.WriteLine($"Error: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
-            else
-            {
-                Console.WriteLine($"Success: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
+            var result = await mcpClient.CallToolAsync(ToolAdminSampleLlm, new Dictionary<string, object?> { ["prompt"] = "test prompt", ["maxTokens"] = 100 });
+            Console.WriteLine(result.IsError == true ? $"Error: {FormatContent(result.Content)}" : $"Success: {FormatContent(result.Content)}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error calling sampleLLM: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Error calling sampleLLM: {ex.Message}"); }
 
-        // Test calling the simple LLM tool
-        Console.WriteLine("\n5. Testing Simple LLM Tool (Anonymous):");
+        // 5. Simple LLM
+        Console.WriteLine("\n5. Testing Simple LLM Tool (simple_llm, Anonymous):");
         try
         {
-            var result = await mcpClient.CallToolAsync("SimpleLLM", new Dictionary<string, object?>
-            {
-                ["message"] = "simple test"
-            });
-
-            if (result.IsError == true)
-            {
-                Console.WriteLine($"Error: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
-            else
-            {
-                Console.WriteLine($"Success: {string.Join(", ", result.Content?.Select(c => c.ToString()) ?? [])}");
-            }
+            var result = await mcpClient.CallToolAsync(ToolSimpleLlm, new Dictionary<string, object?> { ["message"] = "simple test" });
+            Console.WriteLine(result.IsError == true ? $"Error: {FormatContent(result.Content)}" : $"Success: {FormatContent(result.Content)}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error calling SimpleLLM: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"Error calling simple_llm: {ex.Message}"); }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Failed to connect to MCP server: {ex.Message}");
     }
+}
+
+// Helper to format returned content blocks
+static string FormatContent(IEnumerable<ContentBlock>? blocks)
+{
+    if (blocks == null) return string.Empty;
+    var parts = new List<string>();
+    foreach (var b in blocks)
+    {
+        switch (b)
+        {
+            case TextContentBlock t:
+                parts.Add(t.Text ?? string.Empty);
+                break;
+            default:
+                parts.Add(b.GetType().Name);
+                break;
+        }
+    }
+    return string.Join(" | ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }
 
 Console.WriteLine("MCP Authorization Test Client");
