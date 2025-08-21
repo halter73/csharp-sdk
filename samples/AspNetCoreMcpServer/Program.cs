@@ -4,12 +4,17 @@ using OpenTelemetry.Trace;
 using AspNetCoreMcpServer.Tools;
 using AspNetCoreMcpServer.Resources;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ModelContextProtocol.Protocol;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add authorization services
+// Add authentication and authorization services
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+
 builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddMcpServer()
     .WithHttpTransport()
@@ -24,8 +29,11 @@ builder.Services.AddMcpServer()
         // Filter out tools that the user is not authorized to see
         var authorizedTools = new List<Tool>();
         var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
+        var authService = context.Server.Services?.GetService<IAuthorizationService>();
+        var httpContextAccessor = context.Server.Services?.GetService<IHttpContextAccessor>();
+        var httpContext = httpContextAccessor?.HttpContext;
 
-        if (policyProvider != null)
+        if (policyProvider != null && authService != null && httpContext != null)
         {
             foreach (var tool in result.Tools)
             {
@@ -49,9 +57,12 @@ builder.Services.AddMcpServer()
                             var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                             if (policy != null)
                             {
-                                // For now, we'll omit tools that require authorization since we don't have a way to get the current user context
-                                // In a real implementation, you'd get the current user from HttpContext or similar
-                                continue;
+                                var authResult = await authService.AuthorizeAsync(httpContext.User, policy);
+                                if (authResult.Succeeded)
+                                {
+                                    authorizedTools.Add(tool);
+                                }
+                                // If authorization fails, omit the tool from the listing
                             }
                         }
                         catch
@@ -101,24 +112,31 @@ builder.Services.AddMcpServer()
             if (authorizeData.Length > 0)
             {
                 var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
-                if (policyProvider != null)
+                var authService = context.Server.Services?.GetService<IAuthorizationService>();
+                var httpContextAccessor = context.Server.Services?.GetService<IHttpContextAccessor>();
+                var httpContext = httpContextAccessor?.HttpContext;
+
+                if (policyProvider != null && authService != null && httpContext != null)
                 {
                     try
                     {
                         var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                         if (policy != null)
                         {
-                            // For this example, we'll deny access to tools requiring authorization
-                            // In a real implementation, you'd evaluate the policy against the current user
-                            Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - authorization required");
-                            return new CallToolResult
+                            var authResult = await authService.AuthorizeAsync(httpContext.User, policy);
+                            if (!authResult.Succeeded)
                             {
-                                Content = new[]
+                                Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - authorization failed");
+                                return new CallToolResult
                                 {
-                                    new TextContentBlock { Text = "Access forbidden: This tool requires authorization." }
-                                },
-                                IsError = true
-                            };
+                                    Content = new[]
+                                    {
+                                        new TextContentBlock { Text = "Access forbidden: This tool requires authorization." }
+                                    },
+                                    IsError = true
+                                };
+                            }
+                            Console.WriteLine($"Access granted to tool '{context.Params?.Name}' for user '{httpContext.User.Identity?.Name}'");
                         }
                     }
                     catch (Exception ex)
@@ -133,6 +151,18 @@ builder.Services.AddMcpServer()
                             IsError = true
                         };
                     }
+                }
+                else
+                {
+                    Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - no authorization context");
+                    return new CallToolResult
+                    {
+                        Content = new[]
+                        {
+                            new TextContentBlock { Text = "Access forbidden: No authorization context available." }
+                        },
+                        IsError = true
+                    };
                 }
             }
         }
@@ -153,6 +183,10 @@ builder.Services.AddOpenTelemetry()
     .UseOtlpExporter();
 
 var app = builder.Build();
+
+// Add authentication and authorization middleware
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapMcp();
 
