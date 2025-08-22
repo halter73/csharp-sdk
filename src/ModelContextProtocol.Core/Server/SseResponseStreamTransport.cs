@@ -21,7 +21,7 @@ namespace ModelContextProtocol.Server;
 /// <param name="sseResponseStream">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
 /// <param name="messageEndpoint">
 /// The relative or absolute URI the client should use to post MCP JSON-RPC messages for this session.
-/// These messages should be passed to <see cref="OnMessageReceivedAsync(JsonRpcMessage, ClaimsPrincipal?, CancellationToken)"/>.
+/// These messages should be passed to <see cref="OnMessageReceivedAsync(JsonRpcMessage, CancellationToken)"/>.
 /// Defaults to "/message".
 /// </param>
 /// <param name="sessionId">The identifier corresponding to the current MCP session.</param>
@@ -42,7 +42,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// </summary>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the send loop that writes JSON-RPC messages to the SSE response stream.</returns>
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         _isConnected = true;
         await _sseWriter.WriteAllAsync(sseResponseStream, cancellationToken).ConfigureAwait(false);
@@ -65,6 +65,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// <inheritdoc/>
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
+        Throw.IfNull(message);
         await _sseWriter.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
@@ -72,7 +73,6 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// Handles incoming JSON-RPC messages received on the /message endpoint.
     /// </summary>
     /// <param name="message">The JSON-RPC message received from the client.</param>
-    /// <param name="user">The authenticated user associated with the message. Defaults to <see langword="null"/>.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the asynchronous operation to buffer the JSON-RPC message for processing.</returns>
     /// <exception cref="InvalidOperationException">Thrown when there is an attempt to process a message before calling <see cref="RunAsync(CancellationToken)"/>.</exception>
@@ -87,11 +87,11 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// process the message and make it available to the MCP server via the <see cref="MessageReader"/> channel.
     /// </para>
     /// <para>
-    /// This method validates that the transport is connected before processing the message, ensuring proper
-    /// sequencing of operations in the transport lifecycle.
+    /// If 's an authenticated <see cref="ClaimsPrincipal"/> sent the message, that can be included in the <see cref="JsonRpcMessage.Context"/>.
+    /// No other part of the context should be set.
     /// </para>
     /// </remarks>
-    public async Task OnMessageReceivedAsync(JsonRpcMessage message, ClaimsPrincipal? user = null, CancellationToken cancellationToken = default)
+    public async Task OnMessageReceivedAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(message);
 
@@ -99,12 +99,6 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
-
-        // Initialize context if it doesn't exist
-        message.Context ??= new JsonRpcMessageContext();
-
-        // Set the user on the message for access in request handlers
-        message.Context.User = user;
 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }

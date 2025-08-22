@@ -1,4 +1,5 @@
 ﻿using ModelContextProtocol.Protocol;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
@@ -12,7 +13,7 @@ namespace ModelContextProtocol.Server;
 /// Handles processing the request/response body pairs for the Streamable HTTP transport.
 /// This is typically used via <see cref="JsonRpcMessageContext.RelatedTransport"/>.
 /// </summary>
-internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport parentTransport, IDuplexPipe httpBodies, ClaimsPrincipal? user = null) : ITransport
+internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport parentTransport, Stream responseStream) : ITransport
 {
     private readonly SseWriter _sseWriter = new();
     private RequestId _pendingRequest;
@@ -26,11 +27,31 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
     /// False, if nothing was written because the request body did not contain any <see cref="JsonRpcRequest"/> messages to respond to.
     /// The HTTP application should typically respond with an empty "202 Accepted" response in this scenario.
     /// </returns>
-    public async ValueTask<bool> RunAsync(CancellationToken cancellationToken)
+    public async ValueTask<bool> HandlePostAsync(JsonRpcMessage message, CancellationToken cancellationToken)
     {
-        var message = await JsonSerializer.DeserializeAsync(httpBodies.Input.AsStream(),
-            McpJsonUtilities.JsonContext.Default.JsonRpcMessage, cancellationToken).ConfigureAwait(false);
-        await OnMessageReceivedAsync(message, cancellationToken).ConfigureAwait(false);
+        Debug.Assert(_pendingRequest.Id is null);
+
+        if (message is JsonRpcRequest request)
+        {
+            _pendingRequest = request.Id;
+
+            // Invoke the initialize request callback if applicable.
+            if (parentTransport.OnInitRequestReceived is { } onInitRequest && request.Method == RequestMethods.Initialize)
+            {
+                var initializeRequest = JsonSerializer.Deserialize(request.Params, McpJsonUtilities.JsonContext.Default.InitializeRequestParams);
+                await onInitRequest(initializeRequest).ConfigureAwait(false);
+            }
+        }
+
+        message.Context ??= new JsonRpcMessageContext();
+        message.Context.RelatedTransport = this;
+
+        if (parentTransport.FlowExecutionContextFromRequests)
+        {
+            message.Context.ExecutionContext = ExecutionContext.Capture();
+        }
+
+        await parentTransport.MessageWriter.WriteAsync(message, cancellationToken).ConfigureAwait(false);
 
         if (_pendingRequest.Id is null)
         {
@@ -38,12 +59,14 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
         }
 
         _sseWriter.MessageFilter = StopOnFinalResponseFilter;
-        await _sseWriter.WriteAllAsync(httpBodies.Output.AsStream(), cancellationToken).ConfigureAwait(false);
+        await _sseWriter.WriteAllAsync(responseStream, cancellationToken).ConfigureAwait(false);
         return true;
     }
 
     public async Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
+        Throw.IfNull(message);
+
         if (parentTransport.Stateless && message is JsonRpcRequest)
         {
             throw new InvalidOperationException("Server to client requests are not supported in stateless mode.");
@@ -69,40 +92,5 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
                 break;
             }
         }
-    }
-
-    private async ValueTask OnMessageReceivedAsync(JsonRpcMessage? message, CancellationToken cancellationToken)
-    {
-        if (message is null)
-        {
-            throw new InvalidOperationException("Received invalid null message.");
-        }
-
-        if (message is JsonRpcRequest request)
-        {
-            _pendingRequest = request.Id;
-
-            // Invoke the initialize request callback if applicable.
-            if (parentTransport.OnInitRequestReceived is { } onInitRequest && request.Method == RequestMethods.Initialize)
-            {
-                var initializeRequest = JsonSerializer.Deserialize(request.Params, McpJsonUtilities.JsonContext.Default.InitializeRequestParams);
-                await onInitRequest(initializeRequest).ConfigureAwait(false);
-            }
-        }
-
-        // Initialize context if it doesn't exist
-        message.Context ??= new JsonRpcMessageContext();
-
-        message.Context.RelatedTransport = this;
-
-        // Set the user on the message for access in request handlers
-        message.Context.User = user;
-
-        if (parentTransport.FlowExecutionContextFromRequests)
-        {
-            message.Context.ExecutionContext = ExecutionContext.Capture();
-        }
-
-        await parentTransport.MessageWriter.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }
 }

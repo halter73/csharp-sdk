@@ -37,6 +37,12 @@ public abstract class JsonRpcMessage
     /// JSON-RPC messages but is not serialized as part of the JSON-RPC payload. This includes
     /// transport references, execution context, and authenticated user information.
     /// </remarks>
+    /// <remarks>
+    /// This property should only be set when implementing a custom <see cref="ITransport"/>
+    /// that needs to pass additional per-message context or to pass a <see cref="JsonRpcMessageContext.User"/>
+    /// to <see cref="StreamableHttpServerTransport.HandlePostRequest(JsonRpcMessage, Stream, CancellationToken)"/>
+    /// or <see cref="SseResponseStreamTransport.OnMessageReceivedAsync(JsonRpcMessage, CancellationToken)"/> .
+    /// </remarks>
     [JsonIgnore]
     public JsonRpcMessageContext? Context { get; set; }
 
