@@ -40,8 +40,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            AIFunctionMcpServerTool.CreateMetadata(method));
+            options);
     }
 
     /// <summary>
@@ -63,8 +62,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
                 Debug.Assert(args.Services is RequestServiceProvider<GetPromptRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<GetPromptRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<GetPromptRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            AIFunctionMcpServerTool.CreateMetadata(method));
+            options);
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -111,12 +109,6 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     /// <summary>Creates an <see cref="McpServerPrompt"/> that wraps the specified <see cref="AIFunction"/>.</summary>
     public static new AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options)
     {
-        return Create(function, options, []);
-    }
-
-    /// <summary>Creates an <see cref="McpServerPrompt"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options, IReadOnlyList<object> metadata)
-    {
         Throw.IfNull(function);
 
         List<PromptArgument> args = [];
@@ -145,7 +137,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
             Arguments = args,
         };
 
-        return new AIFunctionMcpServerPrompt(function, prompt, metadata);
+        return new AIFunctionMcpServerPrompt(function, prompt, options?.Metadata ?? []);
     }
 
     private static McpServerPromptCreateOptions DeriveOptions(MethodInfo method, McpServerPromptCreateOptions? options)
@@ -162,6 +154,9 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
         {
             newOptions.Description ??= descAttr.Description;
         }
+
+        // Set metadata if not already provided
+        newOptions.Metadata ??= AIFunctionMcpServerTool.CreateMetadata(method);
 
         return newOptions;
     }

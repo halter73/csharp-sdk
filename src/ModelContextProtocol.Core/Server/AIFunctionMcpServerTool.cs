@@ -47,8 +47,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            CreateMetadata(method));
+            options);
     }
 
     /// <summary>
@@ -70,46 +69,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
                 Debug.Assert(args.Services is RequestServiceProvider<CallToolRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<CallToolRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<CallToolRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            CreateMetadata(method));
-    }
-
-    /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerTool Create(AIFunction function, McpServerToolCreateOptions? options, IReadOnlyList<object> metadata)
-    {
-        Throw.IfNull(function);
-
-        Tool tool = new()
-        {
-            Name = options?.Name ?? function.Name,
-            Description = options?.Description ?? function.Description,
-            InputSchema = function.JsonSchema,
-            OutputSchema = CreateOutputSchema(function, options, out bool structuredOutputRequiresWrapping),
-        };
-
-        if (options is not null)
-        {
-            if (options.Title is not null ||
-                options.Idempotent is not null ||
-                options.Destructive is not null ||
-                options.OpenWorld is not null ||
-                options.ReadOnly is not null)
-            {
-                tool.Title = options.Title;
-
-                tool.Annotations = new()
-                {
-                    Title = options.Title,
-                    IdempotentHint = options.Idempotent,
-                    DestructiveHint = options.Destructive,
-                    OpenWorldHint = options.OpenWorld,
-                    ReadOnlyHint = options.ReadOnly,
-                };
-            }
-        }
-
-        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, metadata);
+            options);
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -187,7 +147,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
             }
         }
 
-        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, []);
+        return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, options?.Metadata ?? []);
     }
 
     private static McpServerToolCreateOptions DeriveOptions(MethodInfo method, McpServerToolCreateOptions? options)
@@ -226,6 +186,9 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
         {
             newOptions.Description ??= descAttr.Description;
         }
+
+        // Set metadata if not already provided
+        newOptions.Metadata ??= CreateMetadata(method);
 
         return newOptions;
     }

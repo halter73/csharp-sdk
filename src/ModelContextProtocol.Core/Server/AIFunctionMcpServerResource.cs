@@ -48,8 +48,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
 
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            AIFunctionMcpServerTool.CreateMetadata(method));
+            options);
     }
 
     /// <summary>
@@ -71,8 +70,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
                 Debug.Assert(args.Services is RequestServiceProvider<ReadResourceRequestParams>, $"The service provider should be a {nameof(RequestServiceProvider<ReadResourceRequestParams>)} for this method to work correctly.");
                 return createTargetFunc(((RequestServiceProvider<ReadResourceRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
-            options,
-            AIFunctionMcpServerTool.CreateMetadata(method));
+            options);
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -209,12 +207,6 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     /// <summary>Creates an <see cref="McpServerResource"/> that wraps the specified <see cref="AIFunction"/>.</summary>
     public static new AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options)
     {
-        return Create(function, options, []);
-    }
-
-    /// <summary>Creates an <see cref="McpServerResource"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options, IReadOnlyList<object> metadata)
-    {
         Throw.IfNull(function);
 
         string name = options?.Name ?? function.Name;
@@ -228,7 +220,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
             MimeType = options?.MimeType ?? "application/octet-stream",
         };
 
-        return new AIFunctionMcpServerResource(function, resource, metadata);
+        return new AIFunctionMcpServerResource(function, resource, options?.Metadata ?? []);
     }
 
     private static McpServerResourceCreateOptions DeriveOptions(MemberInfo member, McpServerResourceCreateOptions? options)
@@ -246,6 +238,12 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
         if (member.GetCustomAttribute<DescriptionAttribute>() is { } descAttr)
         {
             newOptions.Description ??= descAttr.Description;
+        }
+
+        // Set metadata if not already provided and the member is a MethodInfo
+        if (member is MethodInfo method)
+        {
+            newOptions.Metadata ??= AIFunctionMcpServerTool.CreateMetadata(method);
         }
 
         return newOptions;
