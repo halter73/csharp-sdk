@@ -24,8 +24,7 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
     /// </para>
     /// <para>
     /// The handler function receives the deserialized request object, the full JSON-RPC request, and a cancellation token,
-    /// and should return a response object that will be serialized back to the client. The transport can be accessed
-    /// via the RelatedTransport property of the JsonRpcRequest.
+    /// and should return a response object that will be serialized back to the client.
     /// </para>
     /// </remarks>
     public void Set<TRequest, TResponse>(

@@ -10,14 +10,14 @@ namespace ModelContextProtocol.Server;
 
 /// <summary>
 /// Handles processing the request/response body pairs for the Streamable HTTP transport.
-/// This is typically used via <see cref="JsonRpcMessage.RelatedTransport"/>.
+/// This is typically used via <see cref="JsonRpcMessageContext.RelatedTransport"/>.
 /// </summary>
 internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport parentTransport, IDuplexPipe httpBodies, ClaimsPrincipal? user = null) : ITransport
 {
     private readonly SseWriter _sseWriter = new();
     private RequestId _pendingRequest;
 
-    public ChannelReader<JsonRpcMessage> MessageReader => throw new NotSupportedException("JsonRpcMessage.RelatedTransport should only be used for sending messages.");
+    public ChannelReader<JsonRpcMessage> MessageReader => throw new NotSupportedException("JsonRpcMessage.Context.RelatedTransport should only be used for sending messages.");
 
     string? ITransport.SessionId => parentTransport.SessionId;
 
@@ -90,14 +90,14 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
             }
         }
 
-        message.RelatedTransport = this;
+        message.Context.RelatedTransport = this;
 
         // Set the user on the message for access in request handlers
-        message.User = user;
+        message.Context.User = user;
 
         if (parentTransport.FlowExecutionContextFromRequests)
         {
-            message.ExecutionContext = ExecutionContext.Capture();
+            message.Context.ExecutionContext = ExecutionContext.Capture();
         }
 
         await parentTransport.MessageWriter.WriteAsync(message, cancellationToken).ConfigureAwait(false);

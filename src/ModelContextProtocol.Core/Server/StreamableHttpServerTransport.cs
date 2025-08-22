@@ -51,7 +51,7 @@ public sealed class StreamableHttpServerTransport : ITransport
 
     /// <summary>
     /// Gets a value indicating whether the execution context should flow from the calls to <see cref="HandlePostRequest(IDuplexPipe, ClaimsPrincipal?, CancellationToken)"/>
-    /// to the corresponding <see cref="JsonRpcMessage.ExecutionContext"/> emitted by the <see cref="MessageReader"/>.
+    /// to the corresponding <see cref="JsonRpcMessageContext.ExecutionContext"/> property contained in the <see cref="JsonRpcMessage"/> instances returned by the <see cref="MessageReader"/>.
     /// </summary>
     /// <remarks>
     /// Defaults to <see langword="false"/>.

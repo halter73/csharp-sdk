@@ -101,7 +101,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
         }
 
         // Set the user on the message for access in request handlers
-        message.User = user;
+        message.Context.User = user;
 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }

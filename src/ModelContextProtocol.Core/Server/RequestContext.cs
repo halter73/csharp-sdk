@@ -48,8 +48,6 @@ public sealed class RequestContext<TParams>
     /// <remarks>
     /// This property provides access to the complete JSON-RPC request that initiated this handler invocation,
     /// including the method name, parameters, request ID, and associated transport and user information.
-    /// The transport can be accessed via the <see cref="Protocol.JsonRpcMessage.RelatedTransport"/> property,
-    /// and the authenticated user can be accessed via the <see cref="Protocol.JsonRpcMessage.User"/> property.
     /// </remarks>
     public JsonRpcRequest JsonRpcRequest { get; }
 

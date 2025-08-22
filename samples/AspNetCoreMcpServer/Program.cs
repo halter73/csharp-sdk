@@ -29,7 +29,7 @@ builder.Services.AddMcpServer()
         var authorizedTools = new List<Tool>();
         var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
         var authService = context.Server.Services?.GetService<IAuthorizationService>();
-        var user = context.JsonRpcRequest.User;
+        var user = context.JsonRpcRequest.Context.User;
 
         if (policyProvider != null && authService != null && user != null)
         {
@@ -111,7 +111,7 @@ builder.Services.AddMcpServer()
             {
                 var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var user = context.JsonRpcRequest.User;
+                var user = context.JsonRpcRequest.Context.User;
 
                 if (policyProvider != null && authService != null && user != null)
                 {
