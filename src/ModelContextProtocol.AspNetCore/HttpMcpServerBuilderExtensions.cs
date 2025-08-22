@@ -31,7 +31,7 @@ public static class HttpMcpServerBuilderExtensions
         builder.Services.AddDataProtection();
 
         // Register authorization filter setup for automatic filter configuration
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Transient<IConfigureOptions<McpServerOptions>, AuthorizationFilterSetup>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<McpServerOptions>, AuthorizationFilterSetup>());
 
         if (configureOptions is not null)
         {

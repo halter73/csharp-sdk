@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -9,10 +10,8 @@ namespace ModelContextProtocol.AspNetCore;
 /// <summary>
 /// Evaluates authorization policies from endpoint metadata.
 /// </summary>
-internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOptions>
+internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider policyProvider) : IConfigureOptions<McpServerOptions>
 {
-    private static readonly Task<AuthorizationPolicy?> s_nullPolicyTask = Task.FromResult<AuthorizationPolicy?>(null);
-
     public void Configure(McpServerOptions options)
     {
         // Configure authorization filters for tools
@@ -29,7 +28,7 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         ConfigureGetPromptFilter(options);
     }
 
-    private static void ConfigureListToolsFilter(McpServerOptions options)
+    private void ConfigureListToolsFilter(McpServerOptions options)
     {
         options.Filters.ListToolsFilters.Add(next => async (context, cancellationToken) =>
         {
@@ -37,7 +36,6 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
 
             // Filter out tools that the user is not authorized to see
             var authorizedTools = new List<Tool>();
-            var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
             var authService = context.Server.Services?.GetService<IAuthorizationService>();
             var user = context.User;
 
@@ -80,14 +78,13 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureCallToolFilter(McpServerOptions options)
+    private void ConfigureCallToolFilter(McpServerOptions options)
     {
         options.Filters.CallToolFilters.Add(next => async (context, cancellationToken) =>
         {
             // Authorization filter for call tool
             if (context.MatchedPrimitive?.Metadata != null)
             {
-                var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
                 var user = context.User;
 
@@ -116,7 +113,7 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureListResourcesFilter(McpServerOptions options)
+    private void ConfigureListResourcesFilter(McpServerOptions options)
     {
         options.Filters.ListResourcesFilters.Add(next => async (context, cancellationToken) =>
         {
@@ -124,7 +121,6 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
 
             // Filter out resources that the user is not authorized to see
             var authorizedResources = new List<Resource>();
-            var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
             var authService = context.Server.Services?.GetService<IAuthorizationService>();
             var user = context.User;
 
@@ -167,7 +163,7 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureListResourceTemplatesFilter(McpServerOptions options)
+    private void ConfigureListResourceTemplatesFilter(McpServerOptions options)
     {
         options.Filters.ListResourceTemplatesFilters.Add(next => async (context, cancellationToken) =>
         {
@@ -175,7 +171,6 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
 
             // Filter out resource templates that the user is not authorized to see
             var authorizedResourceTemplates = new List<ResourceTemplate>();
-            var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
             var authService = context.Server.Services?.GetService<IAuthorizationService>();
             var user = context.User;
 
@@ -218,14 +213,13 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureReadResourceFilter(McpServerOptions options)
+    private void ConfigureReadResourceFilter(McpServerOptions options)
     {
         options.Filters.ReadResourceFilters.Add(next => async (context, cancellationToken) =>
         {
             // Authorization filter for read resource
             if (context.MatchedPrimitive?.Metadata != null)
             {
-                var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
                 var user = context.User;
 
@@ -253,7 +247,7 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureListPromptsFilter(McpServerOptions options)
+    private void ConfigureListPromptsFilter(McpServerOptions options)
     {
         options.Filters.ListPromptsFilters.Add(next => async (context, cancellationToken) =>
         {
@@ -261,7 +255,6 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
 
             // Filter out prompts that the user is not authorized to see
             var authorizedPrompts = new List<Prompt>();
-            var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
             var authService = context.Server.Services?.GetService<IAuthorizationService>();
             var user = context.User;
 
@@ -304,14 +297,13 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
-    private static void ConfigureGetPromptFilter(McpServerOptions options)
+    private void ConfigureGetPromptFilter(McpServerOptions options)
     {
         options.Filters.GetPromptFilters.Add(next => async (context, cancellationToken) =>
         {
             // Authorization filter for get prompt
             if (context.MatchedPrimitive?.Metadata != null)
             {
-                var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
                 var user = context.User;
 
@@ -344,13 +336,31 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
         });
     }
 
+    private async ValueTask<AuthorizationResult> GetAuthorizationResultAsync<TParams>(RequestContext<TParams> context)
+    {
+        var policy = await GetEffectivePolicyAsync(policyProvider, context.MatchedPrimitive?.Metadata ?? []);
+        if (policy is not null)
+        {
+            if (context.Services is null)
+            {
+                throw new InvalidOperationException("Request context does not have services available for authorization.");
+            }
+
+            // ASP.NET Core's AuthorizationMiddleware resolves the IAuthorizationService from scoped request services, so we do the same.
+            var authService = context.Services.GetRequiredService<IAuthorizationService>();
+            return await authService.AuthorizeAsync(context.User ?? new ClaimsPrincipal(new ClaimsIdentity()), context, policy);
+        }
+
+        return AuthorizationResult.Success();
+    }
+
     /// <summary>
     /// Combines authorization policies and requirements from endpoint metadata without considering <see cref="IAllowAnonymous"/>.
     /// </summary>
     /// <param name="policyProvider">The authorization policy provider.</param>
     /// <param name="endpointMetadata">The endpoint metadata collection.</param>
     /// <returns>The combined authorization policy, or null if no authorization is required.</returns>
-    private static async Task<AuthorizationPolicy?> CombineAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
+    private static async ValueTask<AuthorizationPolicy?> CombineAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
     {
         // https://github.com/dotnet/aspnetcore/issues/63365 tracks adding this as public API to AuthorizationPolicy itself.
         // Copied from https://github.com/dotnet/aspnetcore/blob/9f2977bf9cfb539820983bda3bedf81c8cda9f20/src/Security/Authorization/Policy/src/AuthorizationMiddleware.cs#L116-L138
@@ -386,14 +396,13 @@ internal sealed class AuthorizationFilterSetup : IConfigureOptions<McpServerOpti
     /// <param name="policyProvider">The authorization policy provider.</param>
     /// <param name="endpointMetadata">The endpoint metadata collection.</param>
     /// <returns>The combined authorization policy, or null if no authorization is required.</returns>
-    public static Task<AuthorizationPolicy?> GetEffectivePolicyAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
+    private static ValueTask<AuthorizationPolicy?> GetEffectivePolicyAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
     {
         if (endpointMetadata.Any(static m => m is IAllowAnonymous))
         {
-            return s_nullPolicyTask;
+            return default;
         }
 
         return CombineAsync(policyProvider, endpointMetadata);
     }
-
 }
