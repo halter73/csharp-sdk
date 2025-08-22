@@ -20,7 +20,7 @@ builder.Services.AddMcpServer()
     .WithTools<EchoTool>()
     .WithTools<SampleLlmTool>()
     .WithResources<SimpleResourceType>()
-    .UseListToolsFilter(next => async (context, cancellationToken) =>
+    .AddListToolsFilter(next => async (context, cancellationToken) =>
     {
         // Authorization filter for list tools
         var result = await next(context, cancellationToken);
@@ -91,7 +91,7 @@ builder.Services.AddMcpServer()
         Console.WriteLine($"Authorization filter: Listed {authorizedTools.Count} of {result.Tools?.Count ?? 0} tools");
         return new ListToolsResult { Tools = authorizedTools, NextCursor = result.NextCursor };
     })
-    .UseCallToolFilter(next => async (context, cancellationToken) =>
+    .AddCallToolFilter(next => async (context, cancellationToken) =>
     {
         // Authorization filter for call tool
         if (context.MatchedPrimitive?.Metadata != null)

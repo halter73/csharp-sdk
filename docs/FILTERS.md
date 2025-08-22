@@ -4,7 +4,7 @@ This document describes the filter functionality in the MCP Server, which allows
 
 ## Overview
 
-For each handler type in the MCP Server, there are corresponding `UseXXXFilter` methods in `McpServerBuilderExtensions.cs` that allow you to add filters to the handler pipeline. The filters are stored in `McpServerOptions.Filters` and applied during server configuration.
+For each handler type in the MCP Server, there are corresponding `AddXXXFilter` methods in `McpServerBuilderExtensions.cs` that allow you to add filters to the handler pipeline. The filters are stored in `McpServerOptions.Filters` and applied during server configuration.
 
 ## Filter Architecture
 
@@ -27,17 +27,17 @@ Filters are applied in the `McpServer` configuration methods (`ConfigureTools`, 
 
 The following filter methods are available:
 
-- `UseListResourceTemplatesFilter` - Filter for list resource templates handlers
-- `UseListToolsFilter` - Filter for list tools handlers  
-- `UseCallToolFilter` - Filter for call tool handlers
-- `UseListPromptsFilter` - Filter for list prompts handlers
-- `UseGetPromptFilter` - Filter for get prompt handlers
-- `UseListResourcesFilter` - Filter for list resources handlers
-- `UseReadResourceFilter` - Filter for read resource handlers
-- `UseCompleteFilter` - Filter for completion handlers
-- `UseSubscribeToResourcesFilter` - Filter for resource subscription handlers
-- `UseUnsubscribeFromResourcesFilter` - Filter for resource unsubscription handlers
-- `UseSetLoggingLevelFilter` - Filter for logging level handlers
+- `AddListResourceTemplatesFilter` - Filter for list resource templates handlers
+- `AddListToolsFilter` - Filter for list tools handlers
+- `AddCallToolFilter` - Filter for call tool handlers
+- `AddListPromptsFilter` - Filter for list prompts handlers
+- `AddGetPromptFilter` - Filter for get prompt handlers
+- `AddListResourcesFilter` - Filter for list resources handlers
+- `AddReadResourceFilter` - Filter for read resource handlers
+- `AddCompleteFilter` - Filter for completion handlers
+- `AddSubscribeToResourcesFilter` - Filter for resource subscription handlers
+- `AddUnsubscribeFromResourcesFilter` - Filter for resource unsubscription handlers
+- `AddSetLoggingLevelFilter` - Filter for logging level handlers
 
 ## Filter Delegate Types
 
@@ -61,13 +61,13 @@ services.AddMcpServer()
         // Your base handler logic
         return new ListToolsResult { Tools = GetTools() };
     })
-    .UseListToolsFilter(next => async (context, cancellationToken) =>
+    .AddListToolsFilter(next => async (context, cancellationToken) =>
     {
         // Pre-processing logic
         Console.WriteLine("Before handler execution");
-        
+
         var result = await next(context, cancellationToken);
-        
+
         // Post-processing logic
         Console.WriteLine("After handler execution");
         return result;
@@ -81,9 +81,9 @@ Filters are applied in **reverse order**, meaning the last filter added is the o
 ```csharp
 services.AddMcpServer()
     .WithListToolsHandler(baseHandler)
-    .UseListToolsFilter(filter1)  // Executes third (closest to handler)
-    .UseListToolsFilter(filter2)  // Executes second  
-    .UseListToolsFilter(filter3); // Executes first (outermost)
+    .AddListToolsFilter(filter1)  // Executes third (closest to handler)
+    .AddListToolsFilter(filter2)  // Executes second
+    .AddListToolsFilter(filter3); // Executes first (outermost)
 ```
 
 Execution flow: `filter3 -> filter2 -> filter1 -> baseHandler -> filter1 -> filter2 -> filter3`
@@ -94,7 +94,7 @@ Execution flow: `filter3 -> filter2 -> filter1 -> baseHandler -> filter1 -> filt
 - Filters are applied in reverse order, so the last filter added is the outermost (first to execute)
 - The filter pipeline is built during server configuration in the respective `Configure` methods:
   - `ConfigureTools` - applies tool-related filters
-  - `ConfigureResources` - applies resource-related filters  
+  - `ConfigureResources` - applies resource-related filters
   - `ConfigurePrompts` - applies prompt-related filters
   - `ConfigureCompletion` - applies completion filters
   - `ConfigureLogging` - applies logging filters
@@ -110,7 +110,7 @@ This allows for middleware-style composition where outer filters can perform act
 
 ### Logging
 ```csharp
-.UseListToolsFilter(next => async (context, cancellationToken) =>
+.AddListToolsFilter(next => async (context, cancellationToken) =>
 {
     Console.WriteLine($"Processing request from {context.Meta.ProgressToken}");
     var result = await next(context, cancellationToken);
@@ -121,7 +121,7 @@ This allows for middleware-style composition where outer filters can perform act
 
 ### Error Handling
 ```csharp
-.UseCallToolFilter(next => async (context, cancellationToken) =>
+.AddCallToolFilter(next => async (context, cancellationToken) =>
 {
     try
     {
@@ -140,7 +140,7 @@ This allows for middleware-style composition where outer filters can perform act
 
 ### Performance Monitoring
 ```csharp
-.UseListToolsFilter(next => async (context, cancellationToken) =>
+.AddListToolsFilter(next => async (context, cancellationToken) =>
 {
     var stopwatch = Stopwatch.StartNew();
     var result = await next(context, cancellationToken);
@@ -152,12 +152,12 @@ This allows for middleware-style composition where outer filters can perform act
 
 ### Caching
 ```csharp
-.UseListResourcesFilter(next => async (context, cancellationToken) =>
+.AddListResourcesFilter(next => async (context, cancellationToken) =>
 {
     var cacheKey = $"resources:{context.Params.Cursor}";
     if (cache.TryGetValue(cacheKey, out var cached))
         return cached;
-        
+
     var result = await next(context, cancellationToken);
     cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
     return result;
@@ -173,7 +173,7 @@ This allows for middleware-style composition where outer filters can perform act
 
 ### Code Changes Required
 If you were previously accessing filter collections directly (which was an internal API), you should now:
-1. Use the extension methods like `UseListToolsFilter()` instead of accessing internal filter collections
+1. Use the extension methods like `AddListToolsFilter()` instead of accessing internal filter collections
 2. Access filters through `options.Filters.ListToolsFilters` instead of through `McpServerHandlers`
 
 ## Example

@@ -719,7 +719,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseListResourceTemplatesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>> filter)
+    public static IMcpServerBuilder AddListResourceTemplatesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -738,7 +738,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseListToolsFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>> filter)
+    public static IMcpServerBuilder AddListToolsFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -757,7 +757,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseCallToolFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>, Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>> filter)
+    public static IMcpServerBuilder AddCallToolFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>, Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -776,7 +776,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseListPromptsFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>, Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>> filter)
+    public static IMcpServerBuilder AddListPromptsFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>, Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -795,7 +795,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseGetPromptFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>, Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>> filter)
+    public static IMcpServerBuilder AddGetPromptFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>, Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -814,7 +814,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseListResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>, Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>> filter)
+    public static IMcpServerBuilder AddListResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>, Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -833,7 +833,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseReadResourceFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>, Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>> filter)
+    public static IMcpServerBuilder AddReadResourceFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>, Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -852,7 +852,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseCompleteFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>, Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>> filter)
+    public static IMcpServerBuilder AddCompleteFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>, Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -871,7 +871,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseSubscribeToResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
+    public static IMcpServerBuilder AddSubscribeToResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -890,7 +890,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseUnsubscribeFromResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
+    public static IMcpServerBuilder AddUnsubscribeFromResourcesFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
     {
         Throw.IfNull(builder);
 
@@ -909,7 +909,7 @@ public static partial class McpServerBuilderExtensions
     /// Filters are applied in reverse order, so the last filter added will be the outermost (first to execute).
     /// This allows for middleware-style composition where filters can perform actions before and after the inner handler.
     /// </remarks>
-    public static IMcpServerBuilder UseSetLoggingLevelFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
+    public static IMcpServerBuilder AddSetLoggingLevelFilter(this IMcpServerBuilder builder, Func<Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter)
     {
         Throw.IfNull(builder);
 

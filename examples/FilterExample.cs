@@ -7,7 +7,7 @@ namespace ModelContextProtocol.Examples;
 
 /// <summary>
 /// Example demonstrating the new filter functionality for MCP server handlers.
-/// This shows how to use the UseXXXFilter methods to add middleware-style filters
+/// This shows how to use the AddXXXFilter methods to add middleware-style filters
 /// to handler pipelines.
 /// </summary>
 public class FilterExample
@@ -26,48 +26,48 @@ public class FilterExample
                     }
                 };
             })
-            
+
             // Add logging filter (applied last, executes first)
-            .UseListToolsFilter(next => async (context, cancellationToken) =>
+            .AddListToolsFilter(next => async (context, cancellationToken) =>
             {
                 Console.WriteLine($"[Filter 1] Before processing list tools request from {context.Meta.ProgressToken}");
-                
+
                 var result = await next(context, cancellationToken);
-                
+
                 Console.WriteLine($"[Filter 1] After processing, returning {result.Tools?.Count ?? 0} tools");
                 return result;
             })
-            
+
             // Add timing filter (applied second, executes second)
-            .UseListToolsFilter(next => async (context, cancellationToken) =>
+            .AddListToolsFilter(next => async (context, cancellationToken) =>
             {
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 Console.WriteLine("[Filter 2] Starting timing measurement");
-                
+
                 var result = await next(context, cancellationToken);
-                
+
                 stopwatch.Stop();
                 Console.WriteLine($"[Filter 2] Handler execution took {stopwatch.ElapsedMilliseconds}ms");
                 return result;
             })
-            
+
             // Add validation filter (applied first, executes last before handler)
-            .UseListToolsFilter(next => async (context, cancellationToken) =>
+            .AddListToolsFilter(next => async (context, cancellationToken) =>
             {
                 Console.WriteLine("[Filter 3] Validating request");
-                
+
                 // Could add validation logic here
                 if (cancellationToken.IsCancellationRequested)
                 {
                     Console.WriteLine("[Filter 3] Request was cancelled");
                     throw new OperationCanceledException();
                 }
-                
+
                 var result = await next(context, cancellationToken);
                 Console.WriteLine("[Filter 3] Request validation completed");
                 return result;
             })
-            
+
             // Example of call tool filter with error handling
             .WithCallToolHandler(async (context, cancellationToken) =>
             {
@@ -79,7 +79,7 @@ public class FilterExample
                     }
                 };
             })
-            .UseCallToolFilter(next => async (context, cancellationToken) =>
+            .AddCallToolFilter(next => async (context, cancellationToken) =>
             {
                 try
                 {
@@ -101,7 +101,7 @@ public class FilterExample
                     };
                 }
             })
-            
+
             // Example of resource handler filter with caching
             .WithListResourcesHandler(async (context, cancellationToken) =>
             {
@@ -113,19 +113,19 @@ public class FilterExample
                     }
                 };
             })
-            .UseListResourcesFilter(next => async (context, cancellationToken) =>
+            .AddListResourcesFilter(next => async (context, cancellationToken) =>
             {
                 // Simple caching example (in real usage, you'd use a proper cache)
                 var cacheKey = $"resources:{context.Params.Cursor}";
                 Console.WriteLine($"[Cache Filter] Checking cache for key: {cacheKey}");
-                
+
                 // In a real implementation, check cache here
                 // For this example, just call through to the handler
                 var result = await next(context, cancellationToken);
-                
+
                 Console.WriteLine($"[Cache Filter] Caching result with {result.Resources?.Count ?? 0} resources");
                 // In a real implementation, store result in cache here
-                
+
                 return result;
             });
     }
@@ -135,7 +135,7 @@ public class FilterExample
 Expected execution order when ListToolsHandler is called:
 
 1. Filter 3 (Validation) - "Validating request"
-2. Filter 2 (Timing) - "Starting timing measurement" 
+2. Filter 2 (Timing) - "Starting timing measurement"
 3. Filter 1 (Logging) - "Before processing list tools request"
 4. Base Handler - Executes the actual tool listing logic
 5. Filter 1 (Logging) - "After processing, returning X tools"
@@ -143,6 +143,6 @@ Expected execution order when ListToolsHandler is called:
 7. Filter 3 (Validation) - "Request validation completed"
 
 This demonstrates the reverse-order execution where the last added filter
-is the outermost (first to execute) and the first added filter is the 
+is the outermost (first to execute) and the first added filter is the
 innermost (closest to the base handler).
 */

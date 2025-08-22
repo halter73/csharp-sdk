@@ -23,7 +23,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseListToolsFilter_AddsFilterToHandlers()
+    public void AddListToolsFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>, Func<RequestContext<ListToolsRequestParams>, CancellationToken, ValueTask<ListToolsResult>>> filter = next => (context, cancellationToken) =>
@@ -32,7 +32,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseListToolsFilter(filter);
+        _builder.Object.AddListToolsFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -43,7 +43,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseCallToolFilter_AddsFilterToHandlers()
+    public void AddCallToolFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>, Func<RequestContext<CallToolRequestParams>, CancellationToken, ValueTask<CallToolResult>>> filter = next => (context, cancellationToken) =>
@@ -52,7 +52,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseCallToolFilter(filter);
+        _builder.Object.AddCallToolFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -62,7 +62,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseListPromptsFilter_AddsFilterToHandlers()
+    public void AddListPromptsFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>, Func<RequestContext<ListPromptsRequestParams>, CancellationToken, ValueTask<ListPromptsResult>>> filter = next => (context, cancellationToken) =>
@@ -71,7 +71,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseListPromptsFilter(filter);
+        _builder.Object.AddListPromptsFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -81,7 +81,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseGetPromptFilter_AddsFilterToHandlers()
+    public void AddGetPromptFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>, Func<RequestContext<GetPromptRequestParams>, CancellationToken, ValueTask<GetPromptResult>>> filter = next => (context, cancellationToken) =>
@@ -90,7 +90,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseGetPromptFilter(filter);
+        _builder.Object.AddGetPromptFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -100,7 +100,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseListResourcesFilter_AddsFilterToHandlers()
+    public void AddListResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>, Func<RequestContext<ListResourcesRequestParams>, CancellationToken, ValueTask<ListResourcesResult>>> filter = next => (context, cancellationToken) =>
@@ -109,7 +109,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseListResourcesFilter(filter);
+        _builder.Object.AddListResourcesFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -119,7 +119,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseReadResourceFilter_AddsFilterToHandlers()
+    public void AddReadResourceFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>, Func<RequestContext<ReadResourceRequestParams>, CancellationToken, ValueTask<ReadResourceResult>>> filter = next => (context, cancellationToken) =>
@@ -128,7 +128,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseReadResourceFilter(filter);
+        _builder.Object.AddReadResourceFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -138,7 +138,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseCompleteFilter_AddsFilterToHandlers()
+    public void AddCompleteFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>, Func<RequestContext<CompleteRequestParams>, CancellationToken, ValueTask<CompleteResult>>> filter = next => (context, cancellationToken) =>
@@ -147,7 +147,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseCompleteFilter(filter);
+        _builder.Object.AddCompleteFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -157,7 +157,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseSubscribeToResourcesFilter_AddsFilterToHandlers()
+    public void AddSubscribeToResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
@@ -166,7 +166,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseSubscribeToResourcesFilter(filter);
+        _builder.Object.AddSubscribeToResourcesFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -176,7 +176,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseUnsubscribeFromResourcesFilter_AddsFilterToHandlers()
+    public void AddUnsubscribeFromResourcesFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<UnsubscribeRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
@@ -185,7 +185,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseUnsubscribeFromResourcesFilter(filter);
+        _builder.Object.AddUnsubscribeFromResourcesFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -195,7 +195,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseSetLoggingLevelFilter_AddsFilterToHandlers()
+    public void AddSetLoggingLevelFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>, Func<RequestContext<SetLevelRequestParams>, CancellationToken, ValueTask<EmptyResult>>> filter = next => (context, cancellationToken) =>
@@ -204,7 +204,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseSetLoggingLevelFilter(filter);
+        _builder.Object.AddSetLoggingLevelFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
@@ -214,7 +214,7 @@ public class McpServerFilterTests
     }
 
     [Fact]
-    public void UseListResourceTemplatesFilter_AddsFilterToHandlers()
+    public void AddListResourceTemplatesFilter_AddsFilterToHandlers()
     {
         // Arrange
         Func<Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>, Func<RequestContext<ListResourceTemplatesRequestParams>, CancellationToken, ValueTask<ListResourceTemplatesResult>>> filter = next => (context, cancellationToken) =>
@@ -223,7 +223,7 @@ public class McpServerFilterTests
         };
 
         // Act
-        _builder.Object.UseListResourceTemplatesFilter(filter);
+        _builder.Object.AddListResourceTemplatesFilter(filter);
 
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
