@@ -6,6 +6,7 @@ using AspNetCoreMcpServer.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +30,7 @@ builder.Services.AddMcpServer()
         var authorizedTools = new List<Tool>();
         var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
         var authService = context.Server.Services?.GetService<IAuthorizationService>();
-        var user = context.JsonRpcRequest.Context?.User;
+        var user = context.User;
 
         if (policyProvider != null && authService != null && user != null)
         {
@@ -55,7 +56,7 @@ builder.Services.AddMcpServer()
                             var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                             if (policy != null)
                             {
-                                var authResult = await authService.AuthorizeAsync(user, policy);
+                                var authResult = await authService.AuthorizeAsync(user, context, policy);
                                 if (authResult.Succeeded)
                                 {
                                     authorizedTools.Add(tool);
@@ -111,7 +112,7 @@ builder.Services.AddMcpServer()
             {
                 var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var user = context.JsonRpcRequest.Context?.User;
+                var user = context.User;
 
                 if (policyProvider != null && authService != null && user != null)
                 {
@@ -120,7 +121,7 @@ builder.Services.AddMcpServer()
                         var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                         if (policy != null)
                         {
-                            var authResult = await authService.AuthorizeAsync(user, policy);
+                            var authResult = await authService.AuthorizeAsync(user, context, policy);
                             if (!authResult.Succeeded)
                             {
                                 Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - authorization failed");

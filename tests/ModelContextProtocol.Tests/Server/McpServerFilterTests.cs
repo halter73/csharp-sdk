@@ -37,7 +37,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         // Verify that the filter was added to the options
         Assert.Single(options.Filters.ListToolsFilters);
     }
@@ -57,7 +57,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.CallToolFilters);
     }
 
@@ -76,7 +76,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.ListPromptsFilters);
     }
 
@@ -95,7 +95,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.GetPromptFilters);
     }
 
@@ -114,7 +114,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.ListResourcesFilters);
     }
 
@@ -133,7 +133,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.ReadResourceFilters);
     }
 
@@ -152,7 +152,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.CompleteFilters);
     }
 
@@ -171,7 +171,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.SubscribeToResourcesFilters);
     }
 
@@ -190,7 +190,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.UnsubscribeFromResourcesFilters);
     }
 
@@ -209,7 +209,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.SetLoggingLevelFilters);
     }
 
@@ -228,7 +228,7 @@ public class McpServerFilterTests
         // Assert
         var serviceProvider = _services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
-        
+
         Assert.Single(options.Filters.ListResourceTemplatesFilters);
     }
 }
