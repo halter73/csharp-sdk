@@ -10,20 +10,17 @@ namespace ModelContextProtocol.AspNetCore;
 /// <summary>
 /// Evaluates authorization policies from endpoint metadata.
 /// </summary>
-internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider policyProvider) : IConfigureOptions<McpServerOptions>
+internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider? policyProvider = null) : IConfigureOptions<McpServerOptions>
 {
     public void Configure(McpServerOptions options)
     {
-        // Configure authorization filters for tools
         ConfigureListToolsFilter(options);
         ConfigureCallToolFilter(options);
 
-        // Configure authorization filters for resources
         ConfigureListResourcesFilter(options);
         ConfigureListResourceTemplatesFilter(options);
         ConfigureReadResourceFilter(options);
 
-        // Configure authorization filters for prompts
         ConfigureListPromptsFilter(options);
         ConfigureGetPromptFilter(options);
     }
@@ -33,48 +30,10 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
         options.Filters.ListToolsFilters.Add(next => async (context, cancellationToken) =>
         {
             var result = await next(context, cancellationToken);
-
-            // Filter out tools that the user is not authorized to see
-            var authorizedTools = new List<Tool>();
-            var authService = context.Server.Services?.GetService<IAuthorizationService>();
-            var user = context.User;
-
-            if (policyProvider != null && authService != null && user != null)
-            {
-                foreach (var tool in result.Tools)
-                {
-                    if (tool.McpServerTool?.Metadata != null)
-                    {
-                        var policy = await GetEffectivePolicyAsync(policyProvider, tool.McpServerTool.Metadata);
-                        if (policy == null)
-                        {
-                            // No authorization required or AllowAnonymous
-                            authorizedTools.Add(tool);
-                        }
-                        else
-                        {
-                            var authResult = await authService.AuthorizeAsync(user, context, policy);
-                            if (authResult.Succeeded)
-                            {
-                                authorizedTools.Add(tool);
-                            }
-                            // If authorization fails, omit the tool from the listing
-                        }
-                    }
-                    else
-                    {
-                        // No metadata, include the tool
-                        authorizedTools.Add(tool);
-                    }
-                }
-            }
-            else
-            {
-                // No authorization provider, return all tools
-                authorizedTools.AddRange(result.Tools);
-            }
-
-            return new ListToolsResult { Tools = authorizedTools, NextCursor = result.NextCursor };
+            await FilterAuthorizedItemsAsync(
+                result.Tools, static tool => tool.McpServerTool,
+                context.User, context.Services, context);
+            return result;
         });
     }
 
@@ -82,31 +41,14 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
     {
         options.Filters.CallToolFilters.Add(next => async (context, cancellationToken) =>
         {
-            // Authorization filter for call tool
-            if (context.MatchedPrimitive?.Metadata != null)
+            var authResult = await GetAuthorizationResultAsync(context.User, context.MatchedPrimitive, context.Services, context);
+            if (!authResult.Succeeded)
             {
-                var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var user = context.User;
-
-                if (policyProvider != null && authService != null && user != null)
+                return new CallToolResult
                 {
-                    var policy = await GetEffectivePolicyAsync(policyProvider, context.MatchedPrimitive.Metadata);
-                    if (policy != null)
-                    {
-                        var authResult = await authService.AuthorizeAsync(user, context, policy);
-                        if (!authResult.Succeeded)
-                        {
-                            return new CallToolResult
-                            {
-                                Content = new[]
-                                {
-                                    new TextContentBlock { Text = "Access forbidden: This tool requires authorization." }
-                                },
-                                IsError = true
-                            };
-                        }
-                    }
-                }
+                    Content = [new TextContentBlock { Text = "Access forbidden: This tool requires authorization." }],
+                    IsError = true
+                };
             }
 
             return await next(context, cancellationToken);
@@ -118,48 +60,10 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
         options.Filters.ListResourcesFilters.Add(next => async (context, cancellationToken) =>
         {
             var result = await next(context, cancellationToken);
-
-            // Filter out resources that the user is not authorized to see
-            var authorizedResources = new List<Resource>();
-            var authService = context.Server.Services?.GetService<IAuthorizationService>();
-            var user = context.User;
-
-            if (policyProvider != null && authService != null && user != null)
-            {
-                foreach (var resource in result.Resources)
-                {
-                    if (resource.McpServerResource?.Metadata != null)
-                    {
-                        var policy = await GetEffectivePolicyAsync(policyProvider, resource.McpServerResource.Metadata);
-                        if (policy == null)
-                        {
-                            // No authorization required or AllowAnonymous
-                            authorizedResources.Add(resource);
-                        }
-                        else
-                        {
-                            var authResult = await authService.AuthorizeAsync(user, context, policy);
-                            if (authResult.Succeeded)
-                            {
-                                authorizedResources.Add(resource);
-                            }
-                            // If authorization fails, omit the resource from the listing
-                        }
-                    }
-                    else
-                    {
-                        // No metadata, include the resource
-                        authorizedResources.Add(resource);
-                    }
-                }
-            }
-            else
-            {
-                // No authorization provider, return all resources
-                authorizedResources.AddRange(result.Resources);
-            }
-
-            return new ListResourcesResult { Resources = authorizedResources, NextCursor = result.NextCursor };
+            await FilterAuthorizedItemsAsync(
+                result.Resources, static resource => resource.McpServerResource,
+                context.User, context.Services, context);
+            return result;
         });
     }
 
@@ -168,48 +72,10 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
         options.Filters.ListResourceTemplatesFilters.Add(next => async (context, cancellationToken) =>
         {
             var result = await next(context, cancellationToken);
-
-            // Filter out resource templates that the user is not authorized to see
-            var authorizedResourceTemplates = new List<ResourceTemplate>();
-            var authService = context.Server.Services?.GetService<IAuthorizationService>();
-            var user = context.User;
-
-            if (policyProvider != null && authService != null && user != null)
-            {
-                foreach (var resourceTemplate in result.ResourceTemplates)
-                {
-                    if (resourceTemplate.McpServerResource?.Metadata != null)
-                    {
-                        var policy = await GetEffectivePolicyAsync(policyProvider, resourceTemplate.McpServerResource.Metadata);
-                        if (policy == null)
-                        {
-                            // No authorization required or AllowAnonymous
-                            authorizedResourceTemplates.Add(resourceTemplate);
-                        }
-                        else
-                        {
-                            var authResult = await authService.AuthorizeAsync(user, context, policy);
-                            if (authResult.Succeeded)
-                            {
-                                authorizedResourceTemplates.Add(resourceTemplate);
-                            }
-                            // If authorization fails, omit the resource template from the listing
-                        }
-                    }
-                    else
-                    {
-                        // No metadata, include the resource template
-                        authorizedResourceTemplates.Add(resourceTemplate);
-                    }
-                }
-            }
-            else
-            {
-                // No authorization provider, return all resource templates
-                authorizedResourceTemplates.AddRange(result.ResourceTemplates);
-            }
-
-            return new ListResourceTemplatesResult { ResourceTemplates = authorizedResourceTemplates, NextCursor = result.NextCursor };
+            await FilterAuthorizedItemsAsync(
+                result.ResourceTemplates, static resourceTemplate => resourceTemplate.McpServerResource,
+                context.User, context.Services, context);
+            return result;
         });
     }
 
@@ -217,30 +83,13 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
     {
         options.Filters.ReadResourceFilters.Add(next => async (context, cancellationToken) =>
         {
-            // Authorization filter for read resource
-            if (context.MatchedPrimitive?.Metadata != null)
+            var authResult = await GetAuthorizationResultAsync(context.User, context.MatchedPrimitive, context.Services, context);
+            if (!authResult.Succeeded)
             {
-                var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var user = context.User;
-
-                if (policyProvider != null && authService != null && user != null)
+                return new ReadResourceResult
                 {
-                    var policy = await GetEffectivePolicyAsync(policyProvider, context.MatchedPrimitive.Metadata);
-                    if (policy != null)
-                    {
-                        var authResult = await authService.AuthorizeAsync(user, context, policy);
-                        if (!authResult.Succeeded)
-                        {
-                            return new ReadResourceResult
-                            {
-                                Contents = new[]
-                                {
-                                    new TextResourceContents { Text = "Access forbidden: This resource requires authorization." }
-                                }
-                            };
-                        }
-                    }
-                }
+                    Contents = [new TextResourceContents { Text = "Access forbidden: This resource requires authorization." }],
+                };
             }
 
             return await next(context, cancellationToken);
@@ -252,48 +101,10 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
         options.Filters.ListPromptsFilters.Add(next => async (context, cancellationToken) =>
         {
             var result = await next(context, cancellationToken);
-
-            // Filter out prompts that the user is not authorized to see
-            var authorizedPrompts = new List<Prompt>();
-            var authService = context.Server.Services?.GetService<IAuthorizationService>();
-            var user = context.User;
-
-            if (policyProvider != null && authService != null && user != null)
-            {
-                foreach (var prompt in result.Prompts)
-                {
-                    if (prompt.McpServerPrompt?.Metadata != null)
-                    {
-                        var policy = await GetEffectivePolicyAsync(policyProvider, prompt.McpServerPrompt.Metadata);
-                        if (policy == null)
-                        {
-                            // No authorization required or AllowAnonymous
-                            authorizedPrompts.Add(prompt);
-                        }
-                        else
-                        {
-                            var authResult = await authService.AuthorizeAsync(user, context, policy);
-                            if (authResult.Succeeded)
-                            {
-                                authorizedPrompts.Add(prompt);
-                            }
-                            // If authorization fails, omit the prompt from the listing
-                        }
-                    }
-                    else
-                    {
-                        // No metadata, include the prompt
-                        authorizedPrompts.Add(prompt);
-                    }
-                }
-            }
-            else
-            {
-                // No authorization provider, return all prompts
-                authorizedPrompts.AddRange(result.Prompts);
-            }
-
-            return new ListPromptsResult { Prompts = authorizedPrompts, NextCursor = result.NextCursor };
+            await FilterAuthorizedItemsAsync(
+                result.Prompts, static prompt => prompt.McpServerPrompt,
+                context.User, context.Services, context);
+            return result;
         });
     }
 
@@ -301,57 +112,76 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
     {
         options.Filters.GetPromptFilters.Add(next => async (context, cancellationToken) =>
         {
-            // Authorization filter for get prompt
-            if (context.MatchedPrimitive?.Metadata != null)
+            var authResult = await GetAuthorizationResultAsync(context.User, context.MatchedPrimitive, context.Services, context);
+            if (!authResult.Succeeded)
             {
-                var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var user = context.User;
-
-                if (policyProvider != null && authService != null && user != null)
+                return new GetPromptResult
                 {
-                    var policy = await GetEffectivePolicyAsync(policyProvider, context.MatchedPrimitive.Metadata);
-                    if (policy != null)
-                    {
-                        var authResult = await authService.AuthorizeAsync(user, context, policy);
-                        if (!authResult.Succeeded)
-                        {
-                            return new GetPromptResult
-                            {
-                                Description = "Access forbidden: This prompt requires authorization.",
-                                Messages = new[]
-                                {
-                                    new PromptMessage
-                                    {
-                                        Role = Role.User,
-                                        Content = new TextContentBlock { Text = "Access forbidden: This prompt requires authorization." }
-                                    }
-                                }
-                            };
-                        }
-                    }
-                }
+                    Description = "Access forbidden: This prompt requires authorization.",
+                };
             }
 
             return await next(context, cancellationToken);
         });
     }
 
-    private async ValueTask<AuthorizationResult> GetAuthorizationResultAsync<TParams>(RequestContext<TParams> context)
+    /// <summary>
+    /// Filters a collection of items based on authorization policies in their metadata.
+    /// For list operations where we need to filter results by authorization.
+    /// </summary>
+    private async ValueTask FilterAuthorizedItemsAsync<T>(IList<T> items, Func<T, IMcpServerPrimitive?> primitiveSelector,
+        ClaimsPrincipal? user, IServiceProvider? requestServices, object context)
     {
-        var policy = await GetEffectivePolicyAsync(policyProvider, context.MatchedPrimitive?.Metadata ?? []);
-        if (policy is not null)
+        for (int i = items.Count - 1; i >= 0; i--)
         {
-            if (context.Services is null)
-            {
-                throw new InvalidOperationException("Request context does not have services available for authorization.");
-            }
+            var authorizationResult = await GetAuthorizationResultAsync(
+                user, primitiveSelector(items[i]), requestServices, context);
 
-            // ASP.NET Core's AuthorizationMiddleware resolves the IAuthorizationService from scoped request services, so we do the same.
-            var authService = context.Services.GetRequiredService<IAuthorizationService>();
-            return await authService.AuthorizeAsync(context.User ?? new ClaimsPrincipal(new ClaimsIdentity()), context, policy);
+            if (!authorizationResult.Succeeded)
+            {
+                items.RemoveAt(i);
+            }
+        }
+    }
+
+    private async ValueTask<AuthorizationResult> GetAuthorizationResultAsync(
+        ClaimsPrincipal? user, IMcpServerPrimitive? primitive, IServiceProvider? requestServices, object context)
+    {
+        // If no primitive was found for this request or there is IAllowAnonymous metadata anywhere on the class or method,
+        // the request should go through as normal.
+        if (primitive is null || primitive.Metadata.Any(static m => m is IAllowAnonymous))
+        {
+            return AuthorizationResult.Success();
         }
 
-        return AuthorizationResult.Success();
+        // There are no [Authorize] style attributes applied to the method or containing class. Any fallback policies
+        // have already been enforced at the HTTP request level by the ASP.NET Core authorization middleware.
+        if (!primitive.Metadata.Any(static m => m is IAuthorizeData or AuthorizationPolicy or IAuthorizationRequirementData))
+        {
+            return AuthorizationResult.Success();
+        }
+
+        if (policyProvider is null)
+        {
+            throw new InvalidOperationException($"You must call AddAuthorization() because an authorization related attribute was found on {primitive.Id}");
+        }
+
+        // TODO: Cache policy lookup. We would probably use a singleton (not-static) ConditionalWeakTable<IMcpServerPrimitive, AuthorizationPolicy?>.
+        var policy = await CombineAsync(policyProvider, primitive.Metadata);
+        if (policy is null)
+        {
+            return AuthorizationResult.Success();
+        }
+
+        if (requestServices is null)
+        {
+            // The IAuthorizationPolicyProvider service must be non-null to get to this line, so it's very unexpected for RequestContext.Services to not be set.
+            throw new InvalidOperationException("RequestContext.Services is not set! The IMcpServer must be initialized with a non-null IServiceProvider.");
+        }
+
+        // ASP.NET Core's AuthorizationMiddleware resolves the IAuthorizationService from scoped request services, so we do the same.
+        var authService = requestServices.GetRequiredService<IAuthorizationService>();
+        return await authService.AuthorizeAsync(user ?? new ClaimsPrincipal(new ClaimsIdentity()), context, policy);
     }
 
     /// <summary>
@@ -360,49 +190,39 @@ internal sealed class AuthorizationFilterSetup(IAuthorizationPolicyProvider poli
     /// <param name="policyProvider">The authorization policy provider.</param>
     /// <param name="endpointMetadata">The endpoint metadata collection.</param>
     /// <returns>The combined authorization policy, or null if no authorization is required.</returns>
-    private static async ValueTask<AuthorizationPolicy?> CombineAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
+    private static async ValueTask<AuthorizationPolicy?> CombineAsync(IAuthorizationPolicyProvider policyProvider, IReadOnlyList<object> endpointMetadata)
     {
         // https://github.com/dotnet/aspnetcore/issues/63365 tracks adding this as public API to AuthorizationPolicy itself.
         // Copied from https://github.com/dotnet/aspnetcore/blob/9f2977bf9cfb539820983bda3bedf81c8cda9f20/src/Security/Authorization/Policy/src/AuthorizationMiddleware.cs#L116-L138
-        var authorizeData = endpointMetadata.OfType<IAuthorizeData>().ToArray();
-        var policies = endpointMetadata.OfType<AuthorizationPolicy>().ToArray();
+        var authorizeData = endpointMetadata.OfType<IAuthorizeData>();
+        var policies = endpointMetadata.OfType<AuthorizationPolicy>();
 
         var policy = await AuthorizationPolicy.CombineAsync(policyProvider, authorizeData, policies);
 
-        var requirementData = endpointMetadata.OfType<IAuthorizationRequirementData>().ToArray();
-        if (requirementData.Length > 0)
+        AuthorizationPolicyBuilder? reqPolicyBuilder = null;
+
+        foreach (var m in endpointMetadata)
         {
-            var reqPolicy = new AuthorizationPolicyBuilder();
-            foreach (var rd in requirementData)
+            if (m is not IAuthorizationRequirementData requirementData)
             {
-                foreach (var r in rd.GetRequirements())
-                {
-                    reqPolicy.AddRequirements(r);
-                }
+                continue;
             }
 
-            // Combine policy with requirements or just use requirements if no policy
-            policy = (policy is null)
-                ? reqPolicy.Build()
-                : AuthorizationPolicy.Combine(policy, reqPolicy.Build());
+            reqPolicyBuilder ??= new AuthorizationPolicyBuilder();
+            foreach (var requirement in requirementData.GetRequirements())
+            {
+                reqPolicyBuilder.AddRequirements(requirement);
+            }
         }
 
-        return policy;
-    }
-
-    /// <summary>
-    /// Gets the effective authorization policy for the specified endpoint metadata. This will return null if metadata contains <see cref="IAllowAnonymous"/>.
-    /// </summary>
-    /// <param name="policyProvider">The authorization policy provider.</param>
-    /// <param name="endpointMetadata">The endpoint metadata collection.</param>
-    /// <returns>The combined authorization policy, or null if no authorization is required.</returns>
-    private static ValueTask<AuthorizationPolicy?> GetEffectivePolicyAsync(IAuthorizationPolicyProvider policyProvider, IEnumerable<object> endpointMetadata)
-    {
-        if (endpointMetadata.Any(static m => m is IAllowAnonymous))
+        if (reqPolicyBuilder is null)
         {
-            return default;
+            return policy;
         }
 
-        return CombineAsync(policyProvider, endpointMetadata);
+        // Combine policy with requirements or just use requirements if no policy
+        return (policy is null)
+            ? reqPolicyBuilder.Build()
+            : AuthorizationPolicy.Combine(policy, reqPolicyBuilder.Build());
     }
 }
