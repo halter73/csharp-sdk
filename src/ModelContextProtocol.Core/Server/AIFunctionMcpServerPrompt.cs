@@ -41,7 +41,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
         return Create(
             AIFunctionFactory.Create(method, target, CreateAIFunctionFactoryOptions(method, options)),
             options,
-            CreateMetadata(method));
+            AIFunctionMcpServerTool.CreateMetadata(method));
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
                 return createTargetFunc(((RequestServiceProvider<GetPromptRequestParams>)args.Services!).Request);
             }, CreateAIFunctionFactoryOptions(method, options)),
             options,
-            CreateMetadata(method));
+            AIFunctionMcpServerTool.CreateMetadata(method));
     }
 
     private static AIFunctionFactoryOptions CreateAIFunctionFactoryOptions(
@@ -146,23 +146,6 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
         };
 
         return new AIFunctionMcpServerPrompt(function, prompt, metadata);
-    }
-
-    /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
-    private static IReadOnlyList<object> CreateMetadata(MethodInfo method)
-    {
-        List<object> metadata = [];
-
-        // Add class-level attributes first
-        if (method.DeclaringType is not null)
-        {
-            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
-        }
-
-        // Add method-level attributes second
-        metadata.AddRange(method.GetCustomAttributes());
-
-        return metadata.AsReadOnly();
     }
 
     private static McpServerPromptCreateOptions DeriveOptions(MethodInfo method, McpServerPromptCreateOptions? options)

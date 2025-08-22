@@ -190,23 +190,6 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
         return new AIFunctionMcpServerTool(function, tool, options?.Services, structuredOutputRequiresWrapping, []);
     }
 
-    /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
-    private static IReadOnlyList<object> CreateMetadata(MethodInfo method)
-    {
-        List<object> metadata = [];
-
-        // Add class-level attributes first
-        if (method.DeclaringType is not null)
-        {
-            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
-        }
-
-        // Add method-level attributes second
-        metadata.AddRange(method.GetCustomAttributes());
-
-        return metadata.AsReadOnly();
-    }
-
     private static McpServerToolCreateOptions DeriveOptions(MethodInfo method, McpServerToolCreateOptions? options)
     {
         McpServerToolCreateOptions newOptions = options?.Clone() ?? new();
@@ -398,6 +381,26 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 
             return false;
         }
+    }
+
+    /// <summary>Creates metadata from attributes on the specified method and its declaring class, with the MethodInfo as the first item.</summary>
+    internal static IReadOnlyList<object> CreateMetadata(MethodInfo method)
+    {
+        // Add the MethodInfo to the start of the metadata similar to what RouteEndpointDataSource does for minimal endpoints.
+        List<object> metadata = [method];
+
+        // Add class-level attributes first, since those are less specific.
+        if (method.DeclaringType is not null)
+        {
+            metadata.AddRange(method.DeclaringType.GetCustomAttributes());
+        }
+
+        // Add method-level attributes second, since those are more specific.
+        // When metadata conflicts, later metadata usually takes precedence with exceptions for metadata like
+        // IAllowAnonymous which always take precedence over IAuthorizeData no matter the order.
+        metadata.AddRange(method.GetCustomAttributes());
+
+        return metadata.AsReadOnly();
     }
 
     /// <summary>Regex that flags runs of characters other than ASCII digits or letters.</summary>
