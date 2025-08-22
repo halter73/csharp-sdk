@@ -558,7 +558,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
 
         RequestHandlers.Set(
             RequestMethods.LoggingSetLevel,
-            (request, destinationTransport, cancellationToken) =>
+            (request, jsonRpcRequest, cancellationToken) =>
             {
                 // Store the provided level.
                 if (request is not null)
@@ -574,7 +574,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
                 // If a handler was provided, now delegate to it.
                 if (setLoggingLevelHandler is not null)
                 {
-                    return InvokeHandlerAsync(setLoggingLevelHandler, request, destinationTransport, cancellationToken);
+                    return InvokeHandlerAsync(setLoggingLevelHandler, request, jsonRpcRequest, cancellationToken);
                 }
 
                 // Otherwise, consider it handled.
@@ -587,23 +587,24 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
     private ValueTask<TResult> InvokeHandlerAsync<TParams, TResult>(
         Func<RequestContext<TParams>, CancellationToken, ValueTask<TResult>> handler,
         TParams? args,
-        ITransport? destinationTransport = null,
+        JsonRpcRequest jsonRpcRequest,
         CancellationToken cancellationToken = default)
     {
         return _servicesScopePerRequest ?
-            InvokeScopedAsync(handler, args, cancellationToken) :
-            handler(new(new DestinationBoundMcpServer(this, destinationTransport)) { Params = args }, cancellationToken);
+            InvokeScopedAsync(handler, args, jsonRpcRequest, cancellationToken) :
+            handler(new(new DestinationBoundMcpServer(this, jsonRpcRequest.RelatedTransport), jsonRpcRequest) { Params = args }, cancellationToken);
 
         async ValueTask<TResult> InvokeScopedAsync(
             Func<RequestContext<TParams>, CancellationToken, ValueTask<TResult>> handler,
             TParams? args,
+            JsonRpcRequest jsonRpcRequest,
             CancellationToken cancellationToken)
         {
             var scope = Services?.GetService<IServiceScopeFactory>()?.CreateAsyncScope();
             try
             {
                 return await handler(
-                    new RequestContext<TParams>(new DestinationBoundMcpServer(this, destinationTransport))
+                    new RequestContext<TParams>(new DestinationBoundMcpServer(this, jsonRpcRequest.RelatedTransport), jsonRpcRequest)
                     {
                         Services = scope?.ServiceProvider ?? Services,
                         Params = args
@@ -627,8 +628,8 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
         JsonTypeInfo<TResponse> responseTypeInfo)
     {
         RequestHandlers.Set(method,
-            (request, destinationTransport, cancellationToken) =>
-                InvokeHandlerAsync(handler, request, destinationTransport, cancellationToken),
+            (request, jsonRpcRequest, cancellationToken) =>
+                InvokeHandlerAsync(handler, request, jsonRpcRequest, cancellationToken),
             requestTypeInfo, responseTypeInfo);
     }
 

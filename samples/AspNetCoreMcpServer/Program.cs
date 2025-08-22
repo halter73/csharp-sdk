@@ -14,7 +14,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
 
 builder.Services.AddAuthorization();
-builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddMcpServer()
     .WithHttpTransport()
@@ -30,10 +29,9 @@ builder.Services.AddMcpServer()
         var authorizedTools = new List<Tool>();
         var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
         var authService = context.Server.Services?.GetService<IAuthorizationService>();
-        var httpContextAccessor = context.Server.Services?.GetService<IHttpContextAccessor>();
-        var httpContext = httpContextAccessor?.HttpContext;
+        var user = context.JsonRpcRequest.User;
 
-        if (policyProvider != null && authService != null && httpContext != null)
+        if (policyProvider != null && authService != null && user != null)
         {
             foreach (var tool in result.Tools)
             {
@@ -57,7 +55,7 @@ builder.Services.AddMcpServer()
                             var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                             if (policy != null)
                             {
-                                var authResult = await authService.AuthorizeAsync(httpContext.User, policy);
+                                var authResult = await authService.AuthorizeAsync(user, policy);
                                 if (authResult.Succeeded)
                                 {
                                     authorizedTools.Add(tool);
@@ -113,17 +111,16 @@ builder.Services.AddMcpServer()
             {
                 var policyProvider = context.Server.Services?.GetService<IAuthorizationPolicyProvider>();
                 var authService = context.Server.Services?.GetService<IAuthorizationService>();
-                var httpContextAccessor = context.Server.Services?.GetService<IHttpContextAccessor>();
-                var httpContext = httpContextAccessor?.HttpContext;
+                var user = context.JsonRpcRequest.User;
 
-                if (policyProvider != null && authService != null && httpContext != null)
+                if (policyProvider != null && authService != null && user != null)
                 {
                     try
                     {
                         var policy = await AuthorizationPolicy.CombineAsync(policyProvider!, authorizeData);
                         if (policy != null)
                         {
-                            var authResult = await authService.AuthorizeAsync(httpContext.User, policy);
+                            var authResult = await authService.AuthorizeAsync(user, policy);
                             if (!authResult.Succeeded)
                             {
                                 Console.WriteLine($"Access denied to tool '{context.Params?.Name}' - authorization failed");
@@ -136,7 +133,7 @@ builder.Services.AddMcpServer()
                                     IsError = true
                                 };
                             }
-                            Console.WriteLine($"Access granted to tool '{context.Params?.Name}' for user '{httpContext.User.Identity?.Name}'");
+                            Console.WriteLine($"Access granted to tool '{context.Params?.Name}' for user '{user.Identity?.Name}'");
                         }
                     }
                     catch (Exception ex)

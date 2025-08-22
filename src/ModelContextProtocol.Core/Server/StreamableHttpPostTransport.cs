@@ -2,6 +2,7 @@
 using System.IO.Pipelines;
 using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Channels;
 
@@ -11,7 +12,7 @@ namespace ModelContextProtocol.Server;
 /// Handles processing the request/response body pairs for the Streamable HTTP transport.
 /// This is typically used via <see cref="JsonRpcMessage.RelatedTransport"/>.
 /// </summary>
-internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport parentTransport, IDuplexPipe httpBodies) : ITransport
+internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport parentTransport, IDuplexPipe httpBodies, ClaimsPrincipal? user = null) : ITransport
 {
     private readonly SseWriter _sseWriter = new();
     private RequestId _pendingRequest;
@@ -90,6 +91,9 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
         }
 
         message.RelatedTransport = this;
+
+        // Set the user on the message for access in request handlers
+        message.User = user;
 
         if (parentTransport.FlowExecutionContextFromRequests)
         {

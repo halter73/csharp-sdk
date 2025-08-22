@@ -23,13 +23,14 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
     /// deserialized request parameters.
     /// </para>
     /// <para>
-    /// The handler function receives the deserialized request object and a cancellation token, and should return
-    /// a response object that will be serialized back to the client.
+    /// The handler function receives the deserialized request object, the full JSON-RPC request, and a cancellation token,
+    /// and should return a response object that will be serialized back to the client. The transport can be accessed
+    /// via the RelatedTransport property of the JsonRpcRequest.
     /// </para>
     /// </remarks>
     public void Set<TRequest, TResponse>(
         string method,
-        Func<TRequest?, ITransport?, CancellationToken, ValueTask<TResponse>> handler,
+        Func<TRequest?, JsonRpcRequest, CancellationToken, ValueTask<TResponse>> handler,
         JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TResponse> responseTypeInfo)
     {
@@ -41,7 +42,7 @@ internal sealed class RequestHandlers : Dictionary<string, Func<JsonRpcRequest, 
         this[method] = async (request, cancellationToken) =>
         {
             TRequest? typedRequest = JsonSerializer.Deserialize(request.Params, requestTypeInfo);
-            object? result = await handler(typedRequest, request.RelatedTransport, cancellationToken).ConfigureAwait(false);
+            object? result = await handler(typedRequest, request, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.SerializeToNode(result, responseTypeInfo);
         };
     }

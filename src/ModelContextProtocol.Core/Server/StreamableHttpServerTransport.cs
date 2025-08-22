@@ -1,5 +1,6 @@
 using ModelContextProtocol.Protocol;
 using System.IO.Pipelines;
+using System.Security.Claims;
 using System.Threading.Channels;
 
 namespace ModelContextProtocol.Server;
@@ -49,7 +50,7 @@ public sealed class StreamableHttpServerTransport : ITransport
     public bool Stateless { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether the execution context should flow from the calls to <see cref="HandlePostRequest(IDuplexPipe, CancellationToken)"/>
+    /// Gets a value indicating whether the execution context should flow from the calls to <see cref="HandlePostRequest(IDuplexPipe, ClaimsPrincipal?, CancellationToken)"/>
     /// to the corresponding <see cref="JsonRpcMessage.ExecutionContext"/> emitted by the <see cref="MessageReader"/>.
     /// </summary>
     /// <remarks>
@@ -97,16 +98,17 @@ public sealed class StreamableHttpServerTransport : ITransport
     /// to the <see cref="JsonRpcRequest"/> that initiated the message.
     /// </summary>
     /// <param name="httpBodies">The duplex pipe facilitates the reading and writing of HTTP request and response data.</param>
-    /// <param name="cancellationToken">This token allows for the operation to be canceled if needed.</param>
+    /// <param name="user">The authenticated user associated with the request. Defaults to <see langword="null"/>.</param>
+    /// <param name="cancellationToken">This token allows for the operation to be canceled if needed. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>
     /// True, if data was written to the response body.
     /// False, if nothing was written because the request body did not contain any <see cref="JsonRpcRequest"/> messages to respond to.
     /// The HTTP application should typically respond with an empty "202 Accepted" response in this scenario.
     /// </returns>
-    public async Task<bool> HandlePostRequest(IDuplexPipe httpBodies, CancellationToken cancellationToken)
+    public async Task<bool> HandlePostRequest(IDuplexPipe httpBodies, ClaimsPrincipal? user = null, CancellationToken cancellationToken = default)
     {
         using var postCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
-        await using var postTransport = new StreamableHttpPostTransport(this, httpBodies);
+        await using var postTransport = new StreamableHttpPostTransport(this, httpBodies, user);
         return await postTransport.RunAsync(postCts.Token).ConfigureAwait(false);
     }
 

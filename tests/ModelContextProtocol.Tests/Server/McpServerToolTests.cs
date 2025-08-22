@@ -18,6 +18,16 @@ namespace ModelContextProtocol.Tests.Server;
 
 public partial class McpServerToolTests
 {
+    private static JsonRpcRequest CreateTestJsonRpcRequest()
+    {
+        return new JsonRpcRequest
+        {
+            Id = new RequestId("test-id"),
+            Method = "test/method",
+            Params = null
+        };
+    }
+
     public McpServerToolTests()
     {
 #if !NET
@@ -53,7 +63,7 @@ public partial class McpServerToolTests
         Assert.DoesNotContain("server", JsonSerializer.Serialize(tool.ProtocolTool.InputSchema, McpJsonUtilities.DefaultOptions));
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Equal("42", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -79,7 +89,7 @@ public partial class McpServerToolTests
         }, new() { Services = services });
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.NotNull(result);
         Assert.NotNull(result.Content);
@@ -386,8 +396,8 @@ public partial class McpServerToolTests
             Assert.Same(mockServer.Object, server);
             return (IList<ContentBlock>)
             [
-                new TextContentBlock { Text = "42" }, 
-                new ImageContentBlock { Data = "1234", MimeType = "image/png" } 
+                new TextContentBlock { Text = "42" },
+                new ImageContentBlock { Data = "1234", MimeType = "image/png" }
             ];
         });
         var result = await tool.InvokeAsync(
@@ -592,7 +602,7 @@ public partial class McpServerToolTests
         yield return new object[] { new() };
         yield return new object[] { new List<string> { "item1", "item2" } };
         yield return new object[] { new Dictionary<string, int> { ["key1"] = 1, ["key2"] = 2 } };
-        yield return new object[] { new Person("John", 27) }; 
+        yield return new object[] { new Person("John", 27) };
     }
 
     private sealed class MyService;

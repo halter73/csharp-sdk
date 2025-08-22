@@ -56,7 +56,7 @@ internal sealed class StreamableHttpHandler(
         await using var _ = await session.AcquireReferenceAsync(context.RequestAborted);
 
         InitializeSseResponse(context);
-        var wroteResponse = await session.Transport.HandlePostRequest(new HttpDuplexPipe(context), context.RequestAborted);
+        var wroteResponse = await session.Transport.HandlePostRequest(new HttpDuplexPipe(context), context.User, context.RequestAborted);
         if (!wroteResponse)
         {
             // We wound up writing nothing, so there should be no Content-Type response header.

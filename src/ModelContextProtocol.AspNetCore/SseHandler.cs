@@ -104,7 +104,7 @@ internal sealed class SseHandler(
             return;
         }
 
-        await sseSession.Transport.OnMessageReceivedAsync(message, context.RequestAborted);
+        await sseSession.Transport.OnMessageReceivedAsync(message, context.User, context.RequestAborted);
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         await context.Response.WriteAsync("Accepted");
     }

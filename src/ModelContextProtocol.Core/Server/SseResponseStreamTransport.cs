@@ -1,4 +1,5 @@
 using ModelContextProtocol.Protocol;
+using System.Security.Claims;
 using System.Threading.Channels;
 
 namespace ModelContextProtocol.Server;
@@ -9,7 +10,7 @@ namespace ModelContextProtocol.Server;
 /// <remarks>
 /// <para>
 /// This transport provides one-way communication from server to client using the SSE protocol over HTTP,
-/// while receiving client messages through a separate mechanism. It writes messages as 
+/// while receiving client messages through a separate mechanism. It writes messages as
 /// SSE events to a response stream, typically associated with an HTTP response.
 /// </para>
 /// <para>
@@ -20,7 +21,7 @@ namespace ModelContextProtocol.Server;
 /// <param name="sseResponseStream">The response stream to write MCP JSON-RPC messages as SSE events to.</param>
 /// <param name="messageEndpoint">
 /// The relative or absolute URI the client should use to post MCP JSON-RPC messages for this session.
-/// These messages should be passed to <see cref="OnMessageReceivedAsync(JsonRpcMessage, CancellationToken)"/>.
+/// These messages should be passed to <see cref="OnMessageReceivedAsync(JsonRpcMessage, ClaimsPrincipal?, CancellationToken)"/>.
 /// Defaults to "/message".
 /// </param>
 /// <param name="sessionId">The identifier corresponding to the current MCP session.</param>
@@ -71,13 +72,14 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// Handles incoming JSON-RPC messages received on the /message endpoint.
     /// </summary>
     /// <param name="message">The JSON-RPC message received from the client.</param>
+    /// <param name="user">The authenticated user associated with the message. Defaults to <see langword="null"/>.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the asynchronous operation to buffer the JSON-RPC message for processing.</returns>
     /// <exception cref="InvalidOperationException">Thrown when there is an attempt to process a message before calling <see cref="RunAsync(CancellationToken)"/>.</exception>
     /// <remarks>
     /// <para>
-    /// This method is the entry point for processing client-to-server communication in the SSE transport model. 
-    /// While the SSE protocol itself is unidirectional (server to client), this method allows bidirectional 
+    /// This method is the entry point for processing client-to-server communication in the SSE transport model.
+    /// While the SSE protocol itself is unidirectional (server to client), this method allows bidirectional
     /// communication by handling HTTP POST requests sent to the message endpoint.
     /// </para>
     /// <para>
@@ -89,7 +91,7 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
     /// sequencing of operations in the transport lifecycle.
     /// </para>
     /// </remarks>
-    public async Task OnMessageReceivedAsync(JsonRpcMessage message, CancellationToken cancellationToken)
+    public async Task OnMessageReceivedAsync(JsonRpcMessage message, ClaimsPrincipal? user = null, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(message);
 
@@ -97,6 +99,9 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
         {
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
+
+        // Set the user on the message for access in request handlers
+        message.User = user;
 
         await _incomingChannel.Writer.WriteAsync(message, cancellationToken).ConfigureAwait(false);
     }

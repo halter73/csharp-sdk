@@ -1,3 +1,5 @@
+using ModelContextProtocol.Protocol;
+
 namespace ModelContextProtocol.Server;
 
 /// <summary>
@@ -15,19 +17,26 @@ public sealed class RequestContext<TParams>
     private IMcpServer _server;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RequestContext{TParams}"/> class with the specified server.
+    /// Initializes a new instance of the <see cref="RequestContext{TParams}"/> class with the specified server and JSON-RPC request.
     /// </summary>
     /// <param name="server">The server with which this instance is associated.</param>
-    public RequestContext(IMcpServer server)
+    /// <param name="jsonRpcRequest">The JSON-RPC request associated with this context.</param>
+    public RequestContext(IMcpServer server, JsonRpcRequest? jsonRpcRequest = null)
     {
         Throw.IfNull(server);
 
         _server = server;
+        JsonRpcRequest = jsonRpcRequest ?? new JsonRpcRequest
+        {
+            Id = new RequestId("test"),
+            Method = "test",
+            Params = null
+        };
         Services = server.Services;
     }
 
     /// <summary>Gets or sets the server with which this instance is associated.</summary>
-    public IMcpServer Server 
+    public IMcpServer Server
     {
         get => _server;
         set
@@ -36,6 +45,17 @@ public sealed class RequestContext<TParams>
             _server = value;
         }
     }
+
+    /// <summary>
+    /// Gets the JSON-RPC request associated with this context.
+    /// </summary>
+    /// <remarks>
+    /// This property provides access to the complete JSON-RPC request that initiated this handler invocation,
+    /// including the method name, parameters, request ID, and associated transport and user information.
+    /// The transport can be accessed via the <see cref="Protocol.JsonRpcMessage.RelatedTransport"/> property,
+    /// and the authenticated user can be accessed via the <see cref="Protocol.JsonRpcMessage.User"/> property.
+    /// </remarks>
+    public JsonRpcRequest JsonRpcRequest { get; }
 
     /// <summary>
     /// Gets or sets the primitive that matched the request.

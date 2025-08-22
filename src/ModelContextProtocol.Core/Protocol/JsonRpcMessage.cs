@@ -1,5 +1,6 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -51,6 +52,30 @@ public abstract class JsonRpcMessage
     /// </remarks>
     [JsonIgnore]
     public ExecutionContext? ExecutionContext { get; set; }
+
+    /// <summary>
+    /// Gets or sets the authenticated user associated with this JSON-RPC message.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This property contains the <see cref="ClaimsPrincipal"/> representing the authenticated user
+    /// who initiated this JSON-RPC message. This enables request handlers to access user identity
+    /// and authorization information without requiring dependency on HTTP context accessors
+    /// or other HTTP-specific abstractions.
+    /// </para>
+    /// <para>
+    /// The user information is automatically populated by the transport layer when processing
+    /// incoming HTTP requests in ASP.NET Core scenarios. For other transport types or scenarios
+    /// where user authentication is not applicable, this property may be <see langword="null"/>.
+    /// </para>
+    /// <para>
+    /// This property is particularly useful in the Streamable HTTP transport where JSON-RPC messages
+    /// may outlive the original HTTP request context, allowing user identity to be preserved
+    /// throughout the message processing pipeline.
+    /// </para>
+    /// </remarks>
+    [JsonIgnore]
+    public ClaimsPrincipal? User { get; set; }
 
     /// <summary>
     /// Provides a <see cref="JsonConverter"/> for <see cref="JsonRpcMessage"/> messages,

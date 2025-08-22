@@ -26,9 +26,9 @@ public sealed class SampleLlmTool
             Temperature = 0.7f,
         };
 
-        var samplingResponse = await thisServer.AsSamplingChatClient().GetResponseAsync(prompt, options, cancellationToken);
+        //var samplingResponse = await thisServer.AsSamplingChatClient().GetResponseAsync(prompt, options, cancellationToken);
 
-        return $"LLM sampling result: {samplingResponse}";
+        return $"LLM sampling result: this is fake, but you must have been an admin to see this.";
     }
 
     [McpServerTool, Description("A simple LLM tool that allows anonymous access")]
