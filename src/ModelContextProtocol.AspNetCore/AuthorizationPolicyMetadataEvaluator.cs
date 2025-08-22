@@ -18,7 +18,6 @@ internal static class AuthorizationPolicyMetadataEvaluator
     {
         // https://github.com/dotnet/aspnetcore/issues/63365 tracks adding this as public API to AuthorizationPolicy itself.
         // Copied from https://github.com/dotnet/aspnetcore/blob/9f2977bf9cfb539820983bda3bedf81c8cda9f20/src/Security/Authorization/Policy/src/AuthorizationMiddleware.cs#L116-L138
-        // TODO: Cache policies using the IMcpServerPrimitive object as the key.
         var authorizeData = endpointMetadata.OfType<IAuthorizeData>().ToArray();
         var policies = endpointMetadata.OfType<AuthorizationPolicy>().ToArray();
 

@@ -290,7 +290,7 @@ public partial class SseIntegrationTests(ITestOutputHelper outputHelper) : Kestr
                 return;
             }
 
-            await session.OnMessageReceivedAsync(message, context.User, context.RequestAborted);
+            await session.OnMessageReceivedAsync(message, context.RequestAborted);
             context.Response.StatusCode = StatusCodes.Status202Accepted;
 
             if (respondInJson)
