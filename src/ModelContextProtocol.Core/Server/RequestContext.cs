@@ -21,17 +21,13 @@ public sealed class RequestContext<TParams>
     /// </summary>
     /// <param name="server">The server with which this instance is associated.</param>
     /// <param name="jsonRpcRequest">The JSON-RPC request associated with this context.</param>
-    public RequestContext(IMcpServer server, JsonRpcRequest? jsonRpcRequest = null)
+    public RequestContext(IMcpServer server, JsonRpcRequest jsonRpcRequest)
     {
         Throw.IfNull(server);
+        Throw.IfNull(jsonRpcRequest);
 
         _server = server;
-        JsonRpcRequest = jsonRpcRequest ?? new JsonRpcRequest
-        {
-            Id = new RequestId("test"),
-            Method = "test",
-            Params = null
-        };
+        JsonRpcRequest = jsonRpcRequest;
         Services = server.Services;
     }
 

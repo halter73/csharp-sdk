@@ -1,4 +1,4 @@
-﻿using Json.Schema;
+using Json.Schema;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -167,12 +167,12 @@ public partial class McpServerToolTests
         Mock<IMcpServer> mockServer = new();
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.True(result.IsError);
 
         result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object) { Services = services },
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()) { Services = services },
             TestContext.Current.CancellationToken);
         Assert.Equal("42", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -193,7 +193,7 @@ public partial class McpServerToolTests
         }, new() { Services = services });
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object),
+            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Equal("42", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -208,7 +208,7 @@ public partial class McpServerToolTests
             options);
 
         var result = await tool1.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object),
+            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Equal("""{"disposals":1}""", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -223,7 +223,7 @@ public partial class McpServerToolTests
             options);
 
         var result = await tool1.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object),
+            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Equal("""{"asyncDisposals":1}""", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -242,7 +242,7 @@ public partial class McpServerToolTests
             options);
 
         var result = await tool1.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object) { Services = services },
+            new RequestContext<CallToolRequestParams>(new Mock<IMcpServer>().Object, CreateTestJsonRpcRequest()) { Services = services },
             TestContext.Current.CancellationToken);
         Assert.Equal("""{"asyncDisposals":1,"disposals":0}""", (result.Content[0] as TextContentBlock)?.Text);
     }
@@ -263,7 +263,7 @@ public partial class McpServerToolTests
         }, new() { SerializerOptions = JsonContext2.Default.Options });
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(3, result.Content.Count);
@@ -297,7 +297,7 @@ public partial class McpServerToolTests
         });
 
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
 
         Assert.Single(result.Content);
@@ -333,7 +333,7 @@ public partial class McpServerToolTests
             return (string?)null;
         });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Empty(result.Content);
     }
@@ -348,7 +348,7 @@ public partial class McpServerToolTests
             return "42";
         });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Single(result.Content);
         Assert.Equal("42", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -364,7 +364,7 @@ public partial class McpServerToolTests
             return new List<string> { "42", "43" };
         }, new() { SerializerOptions = JsonContext2.Default.Options });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Single(result.Content);
         Assert.Equal("""["42","43"]""", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -380,7 +380,7 @@ public partial class McpServerToolTests
             return new TextContentBlock { Text = "42" };
         });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Single(result.Content);
         Assert.Equal("42", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -401,7 +401,7 @@ public partial class McpServerToolTests
             ];
         });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
         Assert.Equal(2, result.Content.Count);
         Assert.Equal("42", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -424,7 +424,7 @@ public partial class McpServerToolTests
             return response;
         });
         var result = await tool.InvokeAsync(
-            new RequestContext<CallToolRequestParams>(mockServer.Object),
+            new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest()),
             TestContext.Current.CancellationToken);
 
         Assert.Same(response, result);
@@ -476,7 +476,7 @@ public partial class McpServerToolTests
         }, new() { Name = toolName, Services = serviceProvider });
 
         var mockServer = new Mock<IMcpServer>();
-        var request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        var request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = toolName },
             Services = serviceProvider
@@ -503,7 +503,7 @@ public partial class McpServerToolTests
         JsonSerializerOptions options = new() { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
         McpServerTool tool = McpServerTool.Create(() => value, new() { Name = "tool", UseStructuredContent = true, SerializerOptions = options });
         var mockServer = new Mock<IMcpServer>();
-        var request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        var request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = "tool" },
         };
@@ -521,7 +521,7 @@ public partial class McpServerToolTests
     {
         McpServerTool tool = McpServerTool.Create(() => { });
         var mockServer = new Mock<IMcpServer>();
-        var request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        var request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = "tool" },
         };
@@ -532,7 +532,7 @@ public partial class McpServerToolTests
         Assert.Null(result.StructuredContent);
 
         tool = McpServerTool.Create(() => Task.CompletedTask);
-        request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = "tool" },
         };
@@ -543,7 +543,7 @@ public partial class McpServerToolTests
         Assert.Null(result.StructuredContent);
 
         tool = McpServerTool.Create(() => default(ValueTask));
-        request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = "tool" },
         };
@@ -561,7 +561,7 @@ public partial class McpServerToolTests
         JsonSerializerOptions options = new() { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
         McpServerTool tool = McpServerTool.Create(() => value, new() { UseStructuredContent = false, SerializerOptions = options });
         var mockServer = new Mock<IMcpServer>();
-        var request = new RequestContext<CallToolRequestParams>(mockServer.Object)
+        var request = new RequestContext<CallToolRequestParams>(mockServer.Object, CreateTestJsonRpcRequest())
         {
             Params = new CallToolRequestParams { Name = "tool" },
         };

@@ -8,6 +8,16 @@ namespace ModelContextProtocol.Tests.Server;
 
 public class McpServerMatchedPrimitiveTests
 {
+    private static JsonRpcRequest CreateTestJsonRpcRequest()
+    {
+        return new JsonRpcRequest
+        {
+            Id = new RequestId("test-id"),
+            Method = "test/method",
+            Params = null
+        };
+    }
+
     [Fact]
     public async Task CallToolHandler_SetsMatchedPrimitive()
     {
@@ -96,7 +106,7 @@ public class McpServerMatchedPrimitiveTests
         // Act - Call the handler through the server's internal capabilities
         var capabilities_internal = ((McpServer)server).ServerCapabilities;
         var result = await capabilities_internal.Prompts.GetPromptHandler!(
-            new RequestContext<GetPromptRequestParams>((IMcpServer)server)
+            new RequestContext<GetPromptRequestParams>((IMcpServer)server, CreateTestJsonRpcRequest())
             {
                 Params = new GetPromptRequestParams { Name = "test-prompt" }
             },
