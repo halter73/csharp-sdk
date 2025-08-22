@@ -15,5 +15,5 @@ public interface IMcpServerPrimitive
     /// Contains attributes from the associated MethodInfo and declaring class (if any),
     /// with class-level attributes appearing before method-level attributes.
     /// </remarks>
-    IList<object> Metadata { get; }
+    IReadOnlyList<object> Metadata { get; }
 }

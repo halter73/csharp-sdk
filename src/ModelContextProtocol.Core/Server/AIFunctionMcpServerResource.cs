@@ -18,7 +18,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
 {
     private readonly Regex? _uriParser;
     private readonly string[] _templateVariableNames = [];
-    private readonly IList<object> _metadata;
+    private readonly IReadOnlyList<object> _metadata;
 
     /// <summary>
     /// Creates an <see cref="AIFunctionMcpServerResource"/> instance for a method, specified via a <see cref="Delegate"/> instance.
@@ -213,7 +213,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     }
 
     /// <summary>Creates an <see cref="McpServerResource"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options, IList<object> metadata)
+    internal static AIFunctionMcpServerResource Create(AIFunction function, McpServerResourceCreateOptions? options, IReadOnlyList<object> metadata)
     {
         Throw.IfNull(function);
 
@@ -232,7 +232,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     }
 
     /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
-    private static IList<object> CreateMetadata(MethodInfo method)
+    private static IReadOnlyList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
 
@@ -297,7 +297,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerResource"/> class.</summary>
-    private AIFunctionMcpServerResource(AIFunction function, ResourceTemplate resourceTemplate, IList<object> metadata)
+    private AIFunctionMcpServerResource(AIFunction function, ResourceTemplate resourceTemplate, IReadOnlyList<object> metadata)
     {
         AIFunction = function;
         ProtocolResourceTemplate = resourceTemplate;
@@ -319,7 +319,7 @@ internal sealed class AIFunctionMcpServerResource : McpServerResource
     public override Resource? ProtocolResource { get; }
 
     /// <inheritdoc />
-    public override IList<object> Metadata => _metadata;
+    public override IReadOnlyList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<ReadResourceResult?> ReadAsync(

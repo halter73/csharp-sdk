@@ -11,7 +11,7 @@ namespace ModelContextProtocol.Server;
 /// <summary>Provides an <see cref="McpServerPrompt"/> that's implemented via an <see cref="AIFunction"/>.</summary>
 internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
 {
-    private readonly IList<object> _metadata;
+    private readonly IReadOnlyList<object> _metadata;
     /// <summary>
     /// Creates an <see cref="McpServerPrompt"/> instance for a method, specified via a <see cref="Delegate"/> instance.
     /// </summary>
@@ -115,7 +115,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     }
 
     /// <summary>Creates an <see cref="McpServerPrompt"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options, IList<object> metadata)
+    internal static AIFunctionMcpServerPrompt Create(AIFunction function, McpServerPromptCreateOptions? options, IReadOnlyList<object> metadata)
     {
         Throw.IfNull(function);
 
@@ -149,7 +149,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     }
 
     /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
-    private static IList<object> CreateMetadata(MethodInfo method)
+    private static IReadOnlyList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
 
@@ -187,7 +187,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerPrompt"/> class.</summary>
-    private AIFunctionMcpServerPrompt(AIFunction function, Prompt prompt, IList<object> metadata)
+    private AIFunctionMcpServerPrompt(AIFunction function, Prompt prompt, IReadOnlyList<object> metadata)
     {
         AIFunction = function;
         ProtocolPrompt = prompt;
@@ -199,7 +199,7 @@ internal sealed class AIFunctionMcpServerPrompt : McpServerPrompt
     public override Prompt ProtocolPrompt { get; }
 
     /// <inheritdoc />
-    public override IList<object> Metadata => _metadata;
+    public override IReadOnlyList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<GetPromptResult> GetAsync(

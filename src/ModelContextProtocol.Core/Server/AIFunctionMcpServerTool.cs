@@ -17,7 +17,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 {
     private readonly ILogger _logger;
     private readonly bool _structuredOutputRequiresWrapping;
-    private readonly IList<object> _metadata;
+    private readonly IReadOnlyList<object> _metadata;
 
     /// <summary>
     /// Creates an <see cref="McpServerTool"/> instance for a method, specified via a <see cref="Delegate"/> instance.
@@ -76,7 +76,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
 
     /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
     /// <summary>Creates an <see cref="McpServerTool"/> that wraps the specified <see cref="AIFunction"/>.</summary>
-    internal static AIFunctionMcpServerTool Create(AIFunction function, McpServerToolCreateOptions? options, IList<object> metadata)
+    internal static AIFunctionMcpServerTool Create(AIFunction function, McpServerToolCreateOptions? options, IReadOnlyList<object> metadata)
     {
         Throw.IfNull(function);
 
@@ -191,7 +191,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     }
 
     /// <summary>Creates metadata from attributes on the specified method and its declaring class.</summary>
-    private static IList<object> CreateMetadata(MethodInfo method)
+    private static IReadOnlyList<object> CreateMetadata(MethodInfo method)
     {
         List<object> metadata = [];
 
@@ -251,7 +251,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     internal AIFunction AIFunction { get; }
 
     /// <summary>Initializes a new instance of the <see cref="McpServerTool"/> class.</summary>
-    private AIFunctionMcpServerTool(AIFunction function, Tool tool, IServiceProvider? serviceProvider, bool structuredOutputRequiresWrapping, IList<object> metadata)
+    private AIFunctionMcpServerTool(AIFunction function, Tool tool, IServiceProvider? serviceProvider, bool structuredOutputRequiresWrapping, IReadOnlyList<object> metadata)
     {
         AIFunction = function;
         ProtocolTool = tool;
@@ -266,7 +266,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
     public override Tool ProtocolTool { get; }
 
     /// <inheritdoc />
-    public override IList<object> Metadata => _metadata;
+    public override IReadOnlyList<object> Metadata => _metadata;
 
     /// <inheritdoc />
     public override async ValueTask<CallToolResult> InvokeAsync(
