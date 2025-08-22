@@ -128,6 +128,7 @@ public sealed class StreamableHttpServerTransport : ITransport
     {
         try
         {
+            _incomingChannel.Writer.Complete();
             await _disposeCts.CancelAsync();
         }
         finally
