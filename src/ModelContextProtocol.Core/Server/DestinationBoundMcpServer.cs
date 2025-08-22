@@ -22,14 +22,24 @@ internal sealed class DestinationBoundMcpServer(McpServer server, ITransport? tr
 
     public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
     {
-        Debug.Assert(message.Context.RelatedTransport is null);
+        if (message.Context is not null)
+        {
+            throw new ArgumentException("Only transports can provide a JsonRpcMessageContext.");
+        }
+
+        message.Context = new JsonRpcMessageContext();
         message.Context.RelatedTransport = transport;
         return server.SendMessageAsync(message, cancellationToken);
     }
 
     public Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default)
     {
-        Debug.Assert(request.Context.RelatedTransport is null);
+        if (request.Context is not null)
+        {
+            throw new ArgumentException("Only transports can provide a JsonRpcMessageContext.");
+        }
+
+        request.Context = new JsonRpcMessageContext();
         request.Context.RelatedTransport = transport;
         return server.SendRequestAsync(request, cancellationToken);
     }

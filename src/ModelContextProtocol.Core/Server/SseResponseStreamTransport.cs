@@ -100,6 +100,9 @@ public sealed class SseResponseStreamTransport(Stream sseResponseStream, string?
             throw new InvalidOperationException($"Transport is not connected. Make sure to call {nameof(RunAsync)} first.");
         }
 
+        // Initialize context if it doesn't exist
+        message.Context ??= new JsonRpcMessageContext();
+
         // Set the user on the message for access in request handlers
         message.Context.User = user;
 

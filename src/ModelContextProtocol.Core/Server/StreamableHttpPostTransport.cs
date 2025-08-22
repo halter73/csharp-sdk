@@ -90,6 +90,9 @@ internal sealed class StreamableHttpPostTransport(StreamableHttpServerTransport 
             }
         }
 
+        // Initialize context if it doesn't exist
+        message.Context ??= new JsonRpcMessageContext();
+
         message.Context.RelatedTransport = this;
 
         // Set the user on the message for access in request handlers

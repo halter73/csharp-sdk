@@ -592,7 +592,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
     {
         return _servicesScopePerRequest ?
             InvokeScopedAsync(handler, args, jsonRpcRequest, cancellationToken) :
-            handler(new(new DestinationBoundMcpServer(this, jsonRpcRequest.Context.RelatedTransport), jsonRpcRequest) { Params = args }, cancellationToken);
+            handler(new(new DestinationBoundMcpServer(this, jsonRpcRequest.Context?.RelatedTransport), jsonRpcRequest) { Params = args }, cancellationToken);
 
         async ValueTask<TResult> InvokeScopedAsync(
             Func<RequestContext<TParams>, CancellationToken, ValueTask<TResult>> handler,
@@ -604,7 +604,7 @@ internal sealed class McpServer : McpEndpoint, IMcpServer
             try
             {
                 return await handler(
-                    new RequestContext<TParams>(new DestinationBoundMcpServer(this, jsonRpcRequest.Context.RelatedTransport), jsonRpcRequest)
+                    new RequestContext<TParams>(new DestinationBoundMcpServer(this, jsonRpcRequest.Context?.RelatedTransport), jsonRpcRequest)
                     {
                         Services = scope?.ServiceProvider ?? Services,
                         Params = args
