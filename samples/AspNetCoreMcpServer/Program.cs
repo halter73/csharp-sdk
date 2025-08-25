@@ -31,10 +31,6 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
-// Add authentication and authorization middleware
-app.UseAuthentication();
-app.UseAuthorization();
-
 app.MapMcp();
 
 app.Run();
