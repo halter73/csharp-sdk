@@ -276,7 +276,7 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
             return async context =>
             {
                 // User without Admin role
-                context.User = CreateUserWithRole("TestUser", "User");
+                context.User = CreateUser("TestUser", "User");
                 await next(context);
             };
         });
@@ -309,7 +309,7 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         {
             return async context =>
             {
-                var user = CreateUserWithRole("AdminUser", "Admin");
+                var user = CreateUser("AdminUser", "Admin");
                 context.User = user;
                 await next(context);
             };
@@ -329,14 +329,9 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         Assert.Equal("Admin: test", content.Text);
     }
 
-    private ClaimsPrincipal CreateUser(string name)
+    private ClaimsPrincipal CreateUser(string name, params string[] roles)
         => new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name)],
-            "TestAuthType", "name", "role"));
-
-    private ClaimsPrincipal CreateUserWithRole(string name, string role)
-        => new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name), new Claim("role", role)],
+            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name), ..roles.Select(role => new Claim("role", role))],
             "TestAuthType", "name", "role"));
 
     [McpServerToolType]
@@ -381,7 +376,7 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
     }
 
     [McpServerToolType]
-    protected class AuthorizationTestTools
+    private class AuthorizationTestTools
     {
         [McpServerTool, Description("A tool that allows anonymous access.")]
         [AllowAnonymous]
