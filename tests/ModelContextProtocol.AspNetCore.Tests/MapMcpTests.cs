@@ -185,38 +185,9 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
     }
 
     [Fact]
-    public async Task AllowAnonymous_Tool_AllowsAnonymousAccess()
-    {
-        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
-        Builder.Services.AddAuthentication();
-        Builder.Services.AddAuthorization();
-
-        await using var app = Builder.Build();
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
-
-        var client = await ConnectAsync();
-        var result = await client.CallToolAsync(
-            "anonymous_tool",
-            new Dictionary<string, object?> { ["message"] = "test" },
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.False(result.IsError ?? false);
-        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
-        Assert.Equal("Anonymous: test", content.Text);
-    }
-
-    [Fact]
     public async Task Authorize_Tool_RequiresAuthentication()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
-        Builder.Services.AddAuthentication();
-        Builder.Services.AddAuthorization();
-
-        await using var app = Builder.Build();
-
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await using var app = await StartServerWithAuth<AuthorizationTestTools>();
 
         var client = await ConnectAsync();
         var result = await client.CallToolAsync(
@@ -231,25 +202,41 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
     }
 
     [Fact]
+    public async Task ClassLevelAuthorize_Tool_RequiresAuthentication()
+    {
+        await using var app = await StartServerWithAuth<AllowAnonymousTestTools>();
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "anonymous_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Anonymous: test", content.Text);
+    }
+
+    [Fact]
+    public async Task AllowAnonymous_Tool_AllowsAnonymousAccess()
+    {
+        await using var app = await StartServerWithAuth<AllowAnonymousTestTools>();
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "anonymous_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Anonymous: test", content.Text);
+    }
+
+    [Fact]
     public async Task Authorize_Tool_AllowsAuthenticatedUser()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
-        Builder.Services.AddAuthentication().AddBearerToken();
-        Builder.Services.AddAuthorization();
-
-        await using var app = Builder.Build();
-
-        app.Use(next =>
-        {
-            return async context =>
-            {
-                context.User = CreateUser("TestUser");
-                await next(context);
-            };
-        });
-
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await using var app = await StartServerWithAuth<AuthorizationTestTools>("TestUser");
 
         var client = await ConnectAsync();
         var result = await client.CallToolAsync(
@@ -265,24 +252,7 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
     [Fact]
     public async Task AuthorizeWithRoles_Tool_RequiresAdminRole()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
-        Builder.Services.AddAuthentication();
-        Builder.Services.AddAuthorization();
-
-        await using var app = Builder.Build();
-
-        app.Use(next =>
-        {
-            return async context =>
-            {
-                // User without Admin role
-                context.User = CreateUser("TestUser", "User");
-                await next(context);
-            };
-        });
-
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await using var app = await StartServerWithAuth<AuthorizationTestTools>("TestUser", "User");
 
         var client = await ConnectAsync();
         var result = await client.CallToolAsync(
@@ -299,24 +269,7 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
     [Fact]
     public async Task AuthorizeWithRoles_Tool_AllowsAdminUser()
     {
-        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
-        Builder.Services.AddAuthentication();
-        Builder.Services.AddAuthorization();
-
-        await using var app = Builder.Build();
-
-        app.Use(next =>
-        {
-            return async context =>
-            {
-                var user = CreateUser("AdminUser", "Admin");
-                context.User = user;
-                await next(context);
-            };
-        });
-
-        app.MapMcp();
-        await app.StartAsync(TestContext.Current.CancellationToken);
+        await using var app = await StartServerWithAuth<AuthorizationTestTools>("AdminUser", "Admin");
 
         var client = await ConnectAsync();
         var result = await client.CallToolAsync(
@@ -329,9 +282,34 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         Assert.Equal("Admin: test", content.Text);
     }
 
+    private async Task<WebApplication> StartServerWithAuth<TToolType>(string? userName = null, params string[] roles)
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<TToolType>();
+        Builder.Services.AddAuthentication();
+        Builder.Services.AddAuthorization();
+
+        var app = Builder.Build();
+
+        if (userName is not null)
+        {
+            app.Use(next =>
+            {
+                return async context =>
+                {
+                    context.User = CreateUser(userName, roles);
+                    await next(context);
+                };
+            });
+        }
+
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        return app;
+    }
+
     private ClaimsPrincipal CreateUser(string name, params string[] roles)
         => new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name), ..roles.Select(role => new Claim("role", role))],
+            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name), .. roles.Select(role => new Claim("role", role))],
             "TestAuthType", "name", "role"));
 
     [McpServerToolType]
@@ -397,6 +375,24 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
         public static string AdminTool(string message)
         {
             return $"Admin: {message}";
+        }
+    }
+
+    [McpServerToolType]
+    [Authorize]
+    private class AllowAnonymousTestTools
+    {
+        [McpServerTool, Description("A tool that allows anonymous access.")]
+        [AllowAnonymous]
+        public static string AnonymousTool(string message)
+        {
+            return $"Anonymous: {message}";
+        }
+
+        [McpServerTool, Description("A tool that requires authorization.")]
+        public static string AuthorizedTool(string message)
+        {
+            return $"Authorized: {message}";
         }
     }
 }
