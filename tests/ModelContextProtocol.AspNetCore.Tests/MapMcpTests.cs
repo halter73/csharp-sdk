@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -183,9 +184,159 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
             m.Message.Contains("request '2' for method 'sampling/createMessage'"));
     }
 
+    [Fact]
+    public async Task AllowAnonymous_Tool_AllowsAnonymousAccess()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
+        Builder.Services.AddAuthentication();
+        Builder.Services.AddAuthorization();
+
+        await using var app = Builder.Build();
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "anonymous_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Anonymous: test", content.Text);
+    }
+
+    [Fact]
+    public async Task Authorize_Tool_RequiresAuthentication()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
+        Builder.Services.AddAuthentication();
+        Builder.Services.AddAuthorization();
+
+        await using var app = Builder.Build();
+
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "authorized_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Should return error because tool requires authorization but user is anonymous
+        Assert.True(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Contains("Access forbidden", content.Text);
+    }
+
+    [Fact]
+    public async Task Authorize_Tool_AllowsAuthenticatedUser()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
+        Builder.Services.AddAuthentication().AddBearerToken();
+        Builder.Services.AddAuthorization();
+
+        await using var app = Builder.Build();
+
+        app.Use(next =>
+        {
+            return async context =>
+            {
+                context.User = CreateUser("TestUser");
+                await next(context);
+            };
+        });
+
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "authorized_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Authorized: test", content.Text);
+    }
+
+    [Fact]
+    public async Task AuthorizeWithRoles_Tool_RequiresAdminRole()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
+        Builder.Services.AddAuthentication();
+        Builder.Services.AddAuthorization();
+
+        await using var app = Builder.Build();
+
+        app.Use(next =>
+        {
+            return async context =>
+            {
+                // User without Admin role
+                context.User = CreateUserWithRole("TestUser", "User");
+                await next(context);
+            };
+        });
+
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "admin_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Should return error because tool requires Admin role but user only has User role
+        Assert.True(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Contains("Access forbidden", content.Text);
+    }
+
+    [Fact]
+    public async Task AuthorizeWithRoles_Tool_AllowsAdminUser()
+    {
+        Builder.Services.AddMcpServer().WithHttpTransport(ConfigureStateless).WithTools<AuthorizationTestTools>();
+        Builder.Services.AddAuthentication();
+        Builder.Services.AddAuthorization();
+
+        await using var app = Builder.Build();
+
+        app.Use(next =>
+        {
+            return async context =>
+            {
+                var user = CreateUserWithRole("AdminUser", "Admin");
+                context.User = user;
+                await next(context);
+            };
+        });
+
+        app.MapMcp();
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = await ConnectAsync();
+        var result = await client.CallToolAsync(
+            "admin_tool",
+            new Dictionary<string, object?> { ["message"] = "test" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var content = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Admin: test", content.Text);
+    }
+
     private ClaimsPrincipal CreateUser(string name)
         => new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name)],
+            "TestAuthType", "name", "role"));
+
+    private ClaimsPrincipal CreateUserWithRole(string name, string role)
+        => new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("name", name), new Claim(ClaimTypes.NameIdentifier, name), new Claim("role", role)],
             "TestAuthType", "name", "role"));
 
     [McpServerToolType]
@@ -226,6 +377,31 @@ public abstract class MapMcpTests(ITestOutputHelper testOutputHelper) : KestrelI
             var samplingResult = await server.SampleAsync(samplingRequest, cancellationToken);
 
             return $"Sampling completed successfully. Client responded: {Assert.IsType<TextContentBlock>(samplingResult.Content).Text}";
+        }
+    }
+
+    [McpServerToolType]
+    protected class AuthorizationTestTools
+    {
+        [McpServerTool, Description("A tool that allows anonymous access.")]
+        [AllowAnonymous]
+        public static string AnonymousTool(string message)
+        {
+            return $"Anonymous: {message}";
+        }
+
+        [McpServerTool, Description("A tool that requires authorization.")]
+        [Authorize]
+        public static string AuthorizedTool(string message)
+        {
+            return $"Authorized: {message}";
+        }
+
+        [McpServerTool, Description("A tool that requires Admin role.")]
+        [Authorize(Roles = "Admin")]
+        public static string AdminTool(string message)
+        {
+            return $"Admin: {message}";
         }
     }
 }
